@@ -61,6 +61,10 @@ namespace ConquestGame
         /// <summary>
         /// 创建六边形边框 Mesh：外圈 + 内圈之间的环带
         /// </summary>
+        /// <summary>
+        /// 创建尖顶六边形边框 Mesh
+        /// 顶点从 +Z 轴开始（尖顶朝上），每 60° 一个角
+        /// </summary>
         private static Mesh CreateBorderMesh()
         {
             const float outer = 0.52f, inner = 0.42f;
@@ -68,7 +72,8 @@ namespace ConquestGame
             var tris = new int[36];
             for (int i = 0; i < 6; i++)
             {
-                float a = 60f * i * Mathf.Deg2Rad;
+                // 起始角度 +90°（尖顶朝 +Z），顺时针旋转
+                float a = (90f + 60f * i) * Mathf.Deg2Rad;
                 float x = Mathf.Cos(a), z = Mathf.Sin(a);
                 verts[i] = new Vector3(x * outer, 0f, z * outer);
                 verts[i + 6] = new Vector3(x * inner, 0f, z * inner);
@@ -83,12 +88,11 @@ namespace ConquestGame
             var m = new Mesh { name = "HexBorder" };
             m.vertices = verts; m.triangles = tris;
             m.RecalculateNormals(); m.RecalculateBounds();
-            Debug.Log($"[Mesh] Border: {verts.Length}v, {tris.Length/3}t, bounds={m.bounds}");
             return m;
         }
 
         /// <summary>
-        /// 创建六边形实心填充 Mesh：中心 + 6 个三角扇形
+        /// 创建尖顶六边形实心填充 Mesh：中心 + 6 个三角扇形
         /// </summary>
         private static Mesh CreateFillMesh()
         {
@@ -98,20 +102,19 @@ namespace ConquestGame
             verts[0] = Vector3.zero;
             for (int i = 0; i < 6; i++)
             {
-                float a = 60f * i * Mathf.Deg2Rad;
+                float a = (90f + 60f * i) * Mathf.Deg2Rad;
                 verts[i + 1] = new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
             }
             for (int i = 0; i < 6; i++)
             {
                 int n = (i + 1) % 6;
                 tris[i * 3 + 0] = 0;
-                tris[i * 3 + 1] = n + 1;     // 反转绕序测试
-                tris[i * 3 + 2] = i + 1;
+                tris[i * 3 + 1] = i + 1;
+                tris[i * 3 + 2] = n + 1;
             }
             var m = new Mesh { name = "HexFill" };
             m.vertices = verts; m.triangles = tris;
             m.RecalculateNormals(); m.RecalculateBounds();
-            Debug.Log($"[Mesh] Fill: {verts.Length}v, {tris.Length/3}t, bounds={m.bounds}");
             return m;
         }
 
