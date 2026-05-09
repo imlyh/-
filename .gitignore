@@ -1,0 +1,46 @@
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Asset meta files should be tracked
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+*.booproj
+*.svd
+*.pdb
+*.opendb
+*.VC.db
+*.pidb
+*.mdb
+*.sln
+*.csproj
+*.unityproj
+*.sln.docstates
+
+# Unity3D generated meta files
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# VS / Rider
+.vs/
+.idea/
+*.userprefs
+*.user
+*.DotSettings.user
+
+# OS
+.DS_Store
+._*
+Thumbs.db
+
+# Crashlytics
+crashlytics-build.properties
