@@ -29,7 +29,7 @@ namespace ConquestGame
                 spawner.ValueRW.Timer -= spawner.ValueRO.Interval;
                 spawnCount++;
 
-                var spawnPos = mapSettings.EnemyCastlePos + new HexCoordinates(-1, 0);
+                var spawnPos = mapSettings.EnemyCastlePos;
                 var enemy = ecb.CreateEntity();
                 ecb.SetName(enemy, $"EnemyWarrior_{spawnCount}");
                 ecb.AddComponent(enemy, new UnitData
