@@ -7,5 +7,6 @@ namespace ConquestGame
         public HexCoordinates Coordinates;
         public CellType CellType;
         public bool IsOccupied;
+        public OwnerType Owner;
     }
 }

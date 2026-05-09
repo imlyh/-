@@ -6,7 +6,8 @@ namespace ConquestGame
     /// <summary>
     /// 第1个执行的System —— 时间推进 + 每日事件触发
     /// </summary>
-    [UpdateInGroup(typeof(SimulationSystemGroup), OrderFirst = true)]
+    [UpdateInGroup(typeof(SimulationSystemGroup))]
+    [UpdateAfter(typeof(MapGenerationSystem))]
     public partial struct GameClockSystem : ISystem
     {
         private const float DayDuration = 24f;
