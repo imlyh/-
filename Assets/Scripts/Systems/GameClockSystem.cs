@@ -14,6 +14,7 @@ namespace ConquestGame
         public void OnCreate(ref SystemState state)
         {
             var entity = state.EntityManager.CreateEntity();
+            state.EntityManager.SetName(entity, "GameTimeData");
             state.EntityManager.AddComponentData(entity, new GameTimeData
             {
                 ElapsedTime = 0f,
