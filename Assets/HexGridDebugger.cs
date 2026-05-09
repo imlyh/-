@@ -87,7 +87,7 @@ namespace ConquestGame
 #if UNITY_EDITOR
                 UnityEditor.Handles.color = Color.white;
                 UnityEditor.Handles.Label(
-                    pos + Vector3.up * 0.5f,
+                    (Vector3)pos + Vector3.up * 0.5f,
                     $"HP:{unit.Health}/{unit.MaxHealth} ATK:{unit.Attack}");
 #endif
             }
