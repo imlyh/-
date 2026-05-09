@@ -167,8 +167,14 @@ namespace ConquestGame
             for (int i = 0; i < cells.Length; i++)
             {
                 Vector3 wp = (Vector3)pos[i].Position;
-                Color color = cellColor(cells[i]);
-                if (color == Color.clear) continue; // 普通平原不建方块
+                var cell = cells[i];
+                Color color;
+                if (cell.CellType == CellType.Castle)
+                    color = cell.Owner == OwnerType.Player ? castlePlayerColor : castleEnemyColor;
+                else if (cell.CellType == CellType.GoldMine)
+                    color = goldMineColor;
+                else
+                    continue; // 平原不建方块
 
                 var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 go.name = MapObjectName(cells[i]);
@@ -247,17 +253,6 @@ namespace ConquestGame
             if (cell.CellType == CellType.GoldMine)
                 return $"GoldMine_{cell.Coordinates}";
             return "";
-        }
-
-        private static Color cellColor(HexCellData cell)
-        {
-            if (cell.CellType == CellType.Castle)
-                return cell.Owner == OwnerType.Player
-                    ? new Color(0f, 0.7f, 0.7f)
-                    : new Color(0.7f, 0f, 0.7f);
-            if (cell.CellType == CellType.GoldMine)
-                return new Color(0.9f, 0.7f, 0.05f);
-            return Color.clear; // 平原不渲染方块
         }
 
         private Material MakeOpaqueMat(Color c)
