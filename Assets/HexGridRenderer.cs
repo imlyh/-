@@ -245,7 +245,7 @@ namespace ConquestGame
         /// <summary>
         /// 自动设置摄像机
         /// </summary>
-        private static void SetupCamera()
+        private void SetupCamera()
         {
             var cam = Camera.main;
             if (cam == null) return;
