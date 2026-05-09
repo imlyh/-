@@ -12,5 +12,6 @@ namespace ConquestGame
         public int AttackBonus;
         public int DefenseBonus;
         public int HealthBonus;
+        public int PendingUpgradeCount;
     }
 }
