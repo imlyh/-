@@ -62,17 +62,15 @@ namespace ConquestGame
         /// 创建六边形边框 Mesh：外圈 + 内圈之间的环带
         /// </summary>
         /// <summary>
-        /// 创建尖顶六边形边框 Mesh
-        /// 顶点从 +Z 轴开始（尖顶朝上），每 60° 一个角
+        /// 创建尖顶六边形边框 Mesh（匹配 R = 0.5 的无缝排列）
         /// </summary>
         private static Mesh CreateBorderMesh()
         {
-            const float outer = 0.52f, inner = 0.42f;
+            const float outer = 0.50f, inner = 0.45f;
             var verts = new Vector3[12];
             var tris = new int[36];
             for (int i = 0; i < 6; i++)
             {
-                // 起始角度 +90°（尖顶朝 +Z），顺时针旋转
                 float a = (90f + 60f * i) * Mathf.Deg2Rad;
                 float x = Mathf.Cos(a), z = Mathf.Sin(a);
                 verts[i] = new Vector3(x * outer, 0f, z * outer);
@@ -92,11 +90,11 @@ namespace ConquestGame
         }
 
         /// <summary>
-        /// 创建尖顶六边形实心填充 Mesh：中心 + 6 个三角扇形
+        /// 创建尖顶六边形实心填充 Mesh（半径 0.44，略小于边框内径）
         /// </summary>
         private static Mesh CreateFillMesh()
         {
-            const float r = 0.41f;
+            const float r = 0.44f;
             var verts = new Vector3[7];
             var tris = new int[18];
             verts[0] = Vector3.zero;
@@ -182,8 +180,16 @@ namespace ConquestGame
             var pos = q.ToComponentDataArray<LocalTransform>(Allocator.Temp);
             if (cells.Length == 0) { cells.Dispose(); pos.Dispose(); return; }
 
+            // 缓存世界坐标用于 LateUpdate 的 Debug.DrawLine
+            cellCount = cells.Length;
+            cellPositions = new Vector3[cellCount];
+
             for (int i = 0; i < cells.Length; i++)
-                BuildCell(cells[i], (Vector3)pos[i].Position);
+            {
+                Vector3 wp = (Vector3)pos[i].Position;
+                cellPositions[i] = wp;
+                BuildCell(cells[i], wp);
+            }
 
             // 单位
             var uq = em.CreateEntityQuery(ComponentType.ReadOnly<UnitData>(),
@@ -243,6 +249,41 @@ namespace ConquestGame
             go.transform.localScale = Vector3.one * 0.35f;
             var mr = go.GetComponent<MeshRenderer>();
             mr.sharedMaterial = unit.Owner == OwnerType.Player ? playerUnitMat : enemyUnitMat;
+        }
+
+        // 缓存格子的世界坐标用于 Debug 绘制
+        private Vector3[] cellPositions;
+        private int cellCount;
+
+        /// <summary>
+        /// 每帧用 Debug.DrawLine 绘制六边形边框（Game/Scene 视图均可见）
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (!hasBuilt || cellPositions == null)
+                return;
+
+            const float r = 0.50f;
+            var corners = new Vector3[6];
+            Color borderC = borderColor;
+
+            for (int i = 0; i < cellCount; i++)
+            {
+                Vector3 center = cellPositions[i];
+
+                // 计算六边形 6 个角
+                for (int j = 0; j < 6; j++)
+                {
+                    float a = (90f + 60f * j) * Mathf.Deg2Rad;
+                    corners[j] = center + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
+                }
+
+                // 画出 6 条边
+                for (int j = 0; j < 6; j++)
+                {
+                    Debug.DrawLine(corners[j], corners[(j + 1) % 6], borderC, 0f, false);
+                }
+            }
         }
 
         /// <summary>

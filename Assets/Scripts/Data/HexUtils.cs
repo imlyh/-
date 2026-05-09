@@ -3,38 +3,33 @@ using Unity.Mathematics;
 namespace ConquestGame
 {
     /// <summary>
-    /// 六边形坐标与世界坐标转换（尖顶朝上 Pointy-Top，Offset 偏移坐标系）
+    /// 六边形坐标与世界坐标转换（尖顶朝上 Pointy-Top，Axial 坐标系）
     ///
-    /// 坐标转换公式：
-    ///   Axial(q, r) → Offset(col, row) → World(x, z)
-    ///     col = q
-    ///     row = r + (q - (q & 1)) / 2
-    ///     x   = col * 1.299
-    ///     z   = row * 2.0 + (col % 2) * 1.0
+    /// 坐标公式 (Axial q,r → 世界 x,z，R = 0.5)：
+    ///   x = R * (3/2 * q)
+    ///   z = R * (√3/2 * q + √3 * r)
     ///
-    /// 关键参数（六边形外接圆半径 = 1.0）：
-    ///   水平间距 1.299  |  垂直间距 2.0  |  奇数列 Z 偏移 1.0
+    /// 相邻六边形中心距 = 2R * √3/2 ≈ 0.866
+    /// 六边形外接圆半径 R = 0.5，边长 = R，宽(平边) = √3*R ≈ 0.866，高(尖顶) = 2R = 1.0
     /// </summary>
     public static class HexUtils
     {
-        private const float HorizontalSpacing = 1.2990381f;  // √3 * 0.75
-        private const float VerticalSpacing = 2f;
-        private const float OddRowOffset = 1f;
+        private const float R = 0.5f;
+        private const float Sqrt3 = 1.7320508f;
+        private const float Sqrt3Over2 = 0.8660254f;
 
         /// <summary>
-        /// 轴向坐标 (q, r) → 世界坐标 (x, z)，Y 始终为 0
+        /// Axial 坐标 (q, r) → 世界坐标 (x, z)，Y 始终为 0
         /// </summary>
         public static float3 ToWorldPosition(HexCoordinates hex)
         {
-            int col = hex.q;
-            int row = hex.r + (hex.q - (hex.q & 1)) / 2;
-            float x = col * HorizontalSpacing;
-            float z = row * VerticalSpacing + (col & 1) * OddRowOffset;
+            float x = R * (1.5f * hex.q);
+            float z = R * (Sqrt3Over2 * hex.q + Sqrt3 * hex.r);
             return new float3(x, 0f, z);
         }
 
         /// <summary>
-        /// 获取向目标移动的下一个六边形坐标
+        /// 获取向目标移动的下一个六边形坐标（选择最接近目标的邻居方向）
         /// </summary>
         public static HexCoordinates NextHexToward(HexCoordinates current, HexCoordinates target)
         {
@@ -59,7 +54,7 @@ namespace ConquestGame
         }
 
         /// <summary>
-        /// 两个六边形中心之间的世界空间距离
+        /// 计算两个六边形中心之间的世界空间距离
         /// </summary>
         public static float WorldDistance(HexCoordinates a, HexCoordinates b)
         {
