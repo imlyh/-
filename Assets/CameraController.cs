@@ -1,15 +1,13 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// ============================================================================
-/// CameraController — 透视摄像机平移 + 缩放 + 初始定位
+/// CameraController — 透视摄像机平移 + 缩放（支持 Input System）
 /// ============================================================================
 ///
-/// 【操作方式】
-///   鼠标右键拖拽 → 平移摄像机
-///   滚轮 → 拉近/拉远
-///
-/// 【初始视角】
-///   自动定位到玩家城堡上方（World 坐标 (0, 0, 4)）
+/// 【操作】
+///   鼠标右键拖拽 → 平移 | WASD → 平移 | 滚轮 → 缩放
+///   启动时自动注视玩家城堡 (0, 0, 4)
 /// ============================================================================
 namespace ConquestGame
 {
@@ -18,10 +16,10 @@ namespace ConquestGame
         [Header("初始目标")]
         [SerializeField] private Vector3 startLookTarget = new Vector3(0f, 0f, 4f);
 
-        [Header("视角参数")]
+        [Header("视角")]
         [SerializeField] private float initialDistance = 12f;
-        [SerializeField] private float pitchAngle = 55f;     // 俯角
-        [SerializeField] private float panSpeed = 0.3f;
+        [SerializeField] private float pitchAngle = 55f;
+        [SerializeField] private float panSpeed = 10f;
         [SerializeField] private float zoomSpeed = 3f;
         [SerializeField] private float minZoom = 5f;
         [SerializeField] private float maxZoom = 30f;
@@ -34,7 +32,8 @@ namespace ConquestGame
 
         private Vector3 lookTarget;
         private float currentZoom;
-        private Vector3 lastMouse;
+        private bool isDragging;
+        private Vector2 lastMouse;
 
         private void Start()
         {
@@ -42,8 +41,7 @@ namespace ConquestGame
             currentZoom = initialDistance;
             UpdateCameraPosition();
 
-            // 确保纯色背景（非天空盒）
-            Camera cam = GetComponent<Camera>();
+            var cam = GetComponent<Camera>();
             if (cam != null)
             {
                 cam.backgroundColor = new Color(0.08f, 0.08f, 0.10f);
@@ -60,23 +58,32 @@ namespace ConquestGame
         }
 
         /// <summary>
-        /// 鼠标右键拖拽平移
+        /// 鼠标右键拖拽平移（Input System API）
         /// </summary>
         private void HandleMousePan()
         {
-            if (Input.GetMouseButtonDown(1))
-                lastMouse = Input.mousePosition;
+            var mouse = Mouse.current;
+            if (mouse == null) return;
 
-            if (Input.GetMouseButton(1))
+            if (mouse.rightButton.wasPressedThisFrame)
             {
-                Vector3 delta = Input.mousePosition - lastMouse;
-                lastMouse = Input.mousePosition;
+                isDragging = true;
+                lastMouse = mouse.position.value;
+            }
+
+            if (mouse.rightButton.wasReleasedThisFrame)
+                isDragging = false;
+
+            if (isDragging)
+            {
+                Vector2 delta = mouse.position.value - lastMouse;
+                lastMouse = mouse.position.value;
                 if (delta.magnitude < 0.5f) return;
 
                 Vector3 right = transform.right;
                 Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
 
-                float factor = panSpeed * 0.01f * (currentZoom / initialDistance);
+                float factor = panSpeed * 0.001f * (currentZoom / initialDistance);
                 lookTarget -= right * delta.x * factor;
                 lookTarget -= forward * delta.y * factor;
 
@@ -85,21 +92,40 @@ namespace ConquestGame
         }
 
         /// <summary>
-        /// WASD 键盘备选平移
+        /// WASD 键盘平移（Input System API）
         /// </summary>
         private void HandleKeyboardPan()
         {
-            float speed = panSpeed * 0.05f * (currentZoom / initialDistance);
+            var kb = Keyboard.current;
+            if (kb == null) return;
+
+            float speed = panSpeed * 0.005f * (currentZoom / initialDistance);
             Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
             Vector3 right = transform.right;
 
             bool moved = false;
-            if (Input.GetKey(KeyCode.W)) { lookTarget += forward * speed; moved = true; }
-            if (Input.GetKey(KeyCode.S)) { lookTarget -= forward * speed; moved = true; }
-            if (Input.GetKey(KeyCode.A)) { lookTarget -= right * speed; moved = true; }
-            if (Input.GetKey(KeyCode.D)) { lookTarget += right * speed; moved = true; }
+            if (kb.wKey.isPressed)  { lookTarget += forward * speed; moved = true; }
+            if (kb.sKey.isPressed)  { lookTarget -= forward * speed; moved = true; }
+            if (kb.aKey.isPressed)  { lookTarget -= right * speed;   moved = true; }
+            if (kb.dKey.isPressed)  { lookTarget += right * speed;   moved = true; }
 
             if (moved) ClampAndApply();
+        }
+
+        /// <summary>
+        /// 滚轮缩放
+        /// </summary>
+        private void HandleZoom()
+        {
+            var mouse = Mouse.current;
+            if (mouse == null) return;
+
+            float scroll = mouse.scroll.y.value / 120f; // 一格 = 120
+            if (scroll == 0f) return;
+
+            currentZoom -= scroll * zoomSpeed;
+            currentZoom = Mathf.Clamp(currentZoom, minZoom, maxZoom);
+            UpdateCameraPosition();
         }
 
         private void ClampAndApply()
@@ -110,21 +136,7 @@ namespace ConquestGame
         }
 
         /// <summary>
-        /// 滚轮缩放：拉近/拉远
-        /// </summary>
-        private void HandleZoom()
-        {
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (Mathf.Abs(scroll) > 0.001f)
-            {
-                currentZoom -= scroll * zoomSpeed;
-                currentZoom = Mathf.Clamp(currentZoom, minZoom, maxZoom);
-                UpdateCameraPosition();
-            }
-        }
-
-        /// <summary>
-        /// 根据注视点和距离计算摄像机位置（保持固定俯角）
+        /// 根据注视点和距离计算摄像机位置（固定俯角）
         /// </summary>
         private void UpdateCameraPosition()
         {
@@ -132,22 +144,8 @@ namespace ConquestGame
             float y = Mathf.Sin(rad) * currentZoom;
             float hDist = Mathf.Cos(rad) * currentZoom;
 
-            // 从 lookTarget 向后方（-Z 方向）偏移
-            transform.position = new Vector3(
-                lookTarget.x,
-                y,
-                lookTarget.z - hDist
-            );
+            transform.position = new Vector3(lookTarget.x, y, lookTarget.z - hDist);
             transform.LookAt(lookTarget);
-        }
-
-        /// <summary>
-        /// 在 Inspector 中可视化初始注视点
-        /// </summary>
-        private void OnDrawGizmosSelected()
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(startLookTarget, 0.3f);
         }
     }
 }
