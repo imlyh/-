@@ -14,5 +14,6 @@ namespace ConquestGame
         public HexCoordinates CurrentPosition;
         public HexCoordinates TargetPosition;
         public float MoveTimer;
+        public float CombatTimer;
     }
 }
