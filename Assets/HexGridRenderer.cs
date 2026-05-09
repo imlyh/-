@@ -8,35 +8,31 @@ namespace ConquestGame
     public class HexGridRenderer : MonoBehaviour
     {
         private Mesh hexMesh;
-        private Mesh outlineMesh;
         private Material hexMaterial;
-        private Material outlineMaterial;
-        private MeshFilter hexFilter;
-        private MeshFilter outlineFilter;
         private bool hasBuilt;
+
+        // 每帧单元状态
+        private int[] unitEntityIds;
+        private Vector3[] unitPositions;
+        private bool[] unitIsPlayer;
+        private int unitCount;
 
         private void Awake()
         {
-            // 子对象：填充层
-            var go = new GameObject("HexFill");
-            go.transform.SetParent(transform, false);
-            hexFilter = go.AddComponent<MeshFilter>();
-            var mr = go.AddComponent<MeshRenderer>();
-            hexMaterial = new Material(Shader.Find("Custom/VertexColorUnlit"));
-            mr.material = hexMaterial;
-
-            // 子对象：描边层
-            var outlineGo = new GameObject("HexOutline");
-            outlineGo.transform.SetParent(transform, false);
-            outlineFilter = outlineGo.AddComponent<MeshFilter>();
-            var omr = outlineGo.AddComponent<MeshRenderer>();
-            outlineMaterial = new Material(Shader.Find("Custom/VertexColorUnlit"));
-            omr.material = outlineMaterial;
+            var shader = Shader.Find("Custom/VertexColorUnlit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (shader == null)
+                    shader = Shader.Find("Unlit/Color");
+            }
+            hexMaterial = new Material(shader);
+            hexMaterial.color = Color.white;
         }
 
         private void Update()
         {
-            if (!Application.isPlaying || hasBuilt)
+            if (!Application.isPlaying)
                 return;
 
             var world = World.DefaultGameObjectInjectionWorld;
@@ -44,144 +40,137 @@ namespace ConquestGame
                 return;
 
             var em = world.EntityManager;
-            var query = em.CreateEntityQuery(
-                ComponentType.ReadOnly<HexCellData>(),
-                ComponentType.ReadOnly<LocalTransform>());
 
-            var cells = query.ToComponentDataArray<HexCellData>(Allocator.Temp);
-            var transforms = query.ToComponentDataArray<LocalTransform>(Allocator.Temp);
-
-            Debug.Log($"[HexGrid] cells count: {cells.Length}");
-
-            if (cells.Length == 0)
+            if (!hasBuilt)
             {
+                var query = em.CreateEntityQuery(
+                    ComponentType.ReadOnly<HexCellData>(),
+                    ComponentType.ReadOnly<LocalTransform>());
+
+                var cells = query.ToComponentDataArray<HexCellData>(Allocator.Temp);
+                var transforms = query.ToComponentDataArray<LocalTransform>(Allocator.Temp);
+
+                if (cells.Length > 0)
+                {
+                    BuildHexMesh(cells, transforms);
+                    hasBuilt = true;
+                }
+
                 cells.Dispose();
                 transforms.Dispose();
-                return;
             }
 
-            var shader1 = Shader.Find("Custom/VertexColorUnlit");
-            var shader2 = Shader.Find("Universal Render Pipeline/Unlit");
-            Debug.Log($"[HexGrid] VertexColorUnlit shader: {shader1 != null}, URP Unlit: {shader2 != null}");
+            if (hasBuilt && hexMesh != null)
+            {
+                // 每帧手动绘制 hex mesh（无相机裁剪优化，直接画）
+                Graphics.DrawMesh(hexMesh, Vector3.zero, Quaternion.identity, hexMaterial, 0);
+            }
 
-            BuildHexMesh(cells, transforms);
-            BuildOutlineMesh(cells, transforms);
-
-            // 单位 Sphere
+            // 手动绘制单位
             var unitQuery = em.CreateEntityQuery(
                 ComponentType.ReadOnly<UnitData>(),
                 ComponentType.ReadOnly<LocalTransform>());
             var units = unitQuery.ToComponentDataArray<UnitData>(Allocator.Temp);
-            var unitTransforms = unitQuery.ToComponentDataArray<LocalTransform>(Allocator.Temp);
+            var ut = unitQuery.ToComponentDataArray<LocalTransform>(Allocator.Temp);
+
+            var sphereMesh = Resources.GetBuiltinResource<Mesh>("Sphere.fbx");
+            // Fallback: create a small quad or use primitive
+            if (sphereMesh == null)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                sphereMesh = go.GetComponent<MeshFilter>().sharedMesh;
+                Destroy(go);
+            }
+
+            var matBlue = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            matBlue.color = Color.blue;
+            var matRed = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            matRed.color = Color.red;
 
             for (int i = 0; i < units.Length; i++)
             {
-                var unitGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                unitGo.name = units[i].Owner == OwnerType.Player ? "PlayerUnit" : "EnemyUnit";
-                unitGo.transform.position = (Vector3)unitTransforms[i].Position;
-                unitGo.transform.localScale = Vector3.one * 0.35f;
-                unitGo.transform.SetParent(transform);
-                var umr = unitGo.GetComponent<MeshRenderer>();
-                umr.material = new Material(Shader.Find("Custom/VertexColorUnlit"));
-                umr.material.color = units[i].Owner == OwnerType.Player
-                    ? Color.blue : Color.red;
+                var pos = (Vector3)ut[i].Position;
+                var mat = units[i].Owner == OwnerType.Player ? matBlue : matRed;
+                var matrix = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * 0.35f);
+                Graphics.DrawMesh(sphereMesh, matrix, mat, 0);
             }
 
             units.Dispose();
-            unitTransforms.Dispose();
-            cells.Dispose();
-            transforms.Dispose();
-            hasBuilt = true;
+            ut.Dispose();
         }
 
         private void BuildHexMesh(NativeArray<HexCellData> cells, NativeArray<LocalTransform> transforms)
         {
             const float innerR = 0.44f;
-            int vph = 7, tph = 18;
-            var verts = new Vector3[cells.Length * vph];
-            var colors = new Color[cells.Length * vph];
-            var tris = new int[cells.Length * tph];
+            const float outerR = 0.50f;
 
-            for (int i = 0; i < cells.Length; i++)
+            // 每个格子：填充 7 verts + 18 indices，描边环 12 verts + 36 indices
+            int vpf = 7, tpf = 18; // fill: per hex
+            int vpo = 12, tpo = 36; // outline: per hex
+            int n = cells.Length;
+            int totalVerts = n * (vpf + vpo);
+            int totalTris = n * (tpf + tpo);
+
+            var verts = new Vector3[totalVerts];
+            var colors = new Color[totalVerts];
+            var tris = new int[totalTris];
+
+            for (int i = 0; i < n; i++)
             {
                 var center = (Vector3)transforms[i].Position;
-                int vi = i * vph, ti = i * tph;
-                var c = HexFillColor(cells[i]);
+                Color fillC = HexFillColor(cells[i]);
+                Color outlineC = HexOutlineColor(cells[i]);
 
-                verts[vi] = center;
-                colors[vi] = c;
+                int vBase = i * (vpf + vpo);
+                int tBase = i * (tpf + tpo);
+
+                // --- 填充层 ---
+                verts[vBase] = center;
+                colors[vBase] = fillC;
                 for (int j = 0; j < 6; j++)
                 {
                     float a = 60f * j * Mathf.Deg2Rad;
-                    verts[vi + 1 + j] = center + new Vector3(Mathf.Cos(a) * innerR, 0f, Mathf.Sin(a) * innerR);
-                    colors[vi + 1 + j] = c;
+                    verts[vBase + 1 + j] = center + new Vector3(Mathf.Cos(a) * innerR, 0f, Mathf.Sin(a) * innerR);
+                    colors[vBase + 1 + j] = fillC;
                 }
                 for (int j = 0; j < 6; j++)
                 {
-                    tris[ti + j * 3] = vi;
-                    tris[ti + j * 3 + 1] = vi + 1 + j;
-                    tris[ti + j * 3 + 2] = vi + 1 + (j + 1) % 6;
+                    tris[tBase + j * 3] = vBase;
+                    tris[tBase + j * 3 + 1] = vBase + 1 + j;
+                    tris[tBase + j * 3 + 2] = vBase + 1 + (j + 1) % 6;
+                }
+
+                // --- 描边层（环）---
+                int vo = vBase + vpf;
+                int to = tBase + tpf;
+                for (int j = 0; j < 6; j++)
+                {
+                    float a = 60f * j * Mathf.Deg2Rad;
+                    verts[vo + j] = center + new Vector3(Mathf.Cos(a) * outerR, 0f, Mathf.Sin(a) * outerR);
+                    verts[vo + 6 + j] = center + new Vector3(Mathf.Cos(a) * innerR, 0f, Mathf.Sin(a) * innerR);
+                    colors[vo + j] = outlineC;
+                    colors[vo + 6 + j] = outlineC;
+                }
+                for (int j = 0; j < 6; j++)
+                {
+                    int nj = (j + 1) % 6;
+                    int t = j * 6; // 2 triangles per quad × 3 indices
+                    tris[to + t] = vo + j;
+                    tris[to + t + 1] = vo + nj;
+                    tris[to + t + 2] = vo + 6 + j;
+                    tris[to + t + 3] = vo + 6 + j;
+                    tris[to + t + 4] = vo + nj;
+                    tris[to + t + 5] = vo + 6 + nj;
                 }
             }
 
-            hexMesh = new Mesh { name = "HexFill" };
+            hexMesh = new Mesh { name = "HexGrid" };
             hexMesh.vertices = verts;
             hexMesh.colors = colors;
             hexMesh.triangles = tris;
             hexMesh.RecalculateNormals();
             hexMesh.RecalculateBounds();
-            hexFilter.mesh = hexMesh;
-        }
-
-        private void BuildOutlineMesh(NativeArray<HexCellData> cells, NativeArray<LocalTransform> transforms)
-        {
-            const float outerR = 0.50f;
-            const float innerR = 0.44f;
-            // 每格一个六边形环 = 12 verts (outer 6 + inner 6), 36 indices (6 quads × 2 tris × 3)
-            int vph = 12, tph = 36;
-            var verts = new Vector3[cells.Length * vph];
-            var colors = new Color[cells.Length * vph];
-            var tris = new int[cells.Length * tph];
-
-            for (int i = 0; i < cells.Length; i++)
-            {
-                var center = (Vector3)transforms[i].Position;
-                int vi = i * vph, ti = i * tph;
-                var oc = HexOutlineColor(cells[i]);
-
-                // 0-5: outer ring, 6-11: inner ring
-                for (int j = 0; j < 6; j++)
-                {
-                    float a = 60f * j * Mathf.Deg2Rad;
-                    verts[vi + j] = center + new Vector3(Mathf.Cos(a) * outerR, 0f, Mathf.Sin(a) * outerR);
-                    verts[vi + 6 + j] = center + new Vector3(Mathf.Cos(a) * innerR, 0f, Mathf.Sin(a) * innerR);
-                    colors[vi + j] = oc;
-                    colors[vi + 6 + j] = oc;
-                }
-
-                // 6 quads → 12 triangles, each quad: outer[j], outer[j+1], inner[j], inner[j+1]
-                for (int j = 0; j < 6; j++)
-                {
-                    int n = (j + 1) % 6;
-                    int t = j * 2;
-                    // tri 1: outer[j], outer[n], inner[j]
-                    tris[ti + t * 3] = vi + j;
-                    tris[ti + t * 3 + 1] = vi + n;
-                    tris[ti + t * 3 + 2] = vi + 6 + j;
-                    // tri 2: inner[j], outer[n], inner[n]
-                    tris[ti + (t + 1) * 3] = vi + 6 + j;
-                    tris[ti + (t + 1) * 3 + 1] = vi + n;
-                    tris[ti + (t + 1) * 3 + 2] = vi + 6 + n;
-                }
-            }
-
-            outlineMesh = new Mesh { name = "HexOutline" };
-            outlineMesh.vertices = verts;
-            outlineMesh.colors = colors;
-            outlineMesh.triangles = tris;
-            outlineMesh.RecalculateNormals();
-            outlineMesh.RecalculateBounds();
-            outlineFilter.mesh = outlineMesh;
+            Debug.Log($"[HexGrid] Mesh built: {totalVerts} verts, {totalTris} indices, bounds={hexMesh.bounds}");
         }
 
         private static Color HexFillColor(HexCellData cell)
@@ -193,18 +182,18 @@ namespace ConquestGame
                     {
                         OwnerType.Player => new Color(0.2f, 0.75f, 0.25f),
                         OwnerType.Enemy => new Color(0.75f, 0.2f, 0.2f),
-                        _ => new Color(0.28f, 0.28f, 0.30f)
+                        _ => new Color(0.3f, 0.3f, 0.32f)
                     };
                 case CellType.Castle:
                     return cell.Owner == OwnerType.Player
-                        ? new Color(0f, 0.8f, 0.8f)
-                        : new Color(0.8f, 0f, 0.8f);
+                        ? new Color(0f, 0.85f, 0.85f)
+                        : new Color(0.85f, 0f, 0.85f);
                 case CellType.GoldMine:
                     return cell.Owner switch
                     {
                         OwnerType.Player => new Color(0.3f, 0.7f, 0.2f),
                         OwnerType.Enemy => new Color(0.7f, 0.2f, 0.2f),
-                        _ => new Color(0.9f, 0.7f, 0.05f)
+                        _ => new Color(0.95f, 0.75f, 0.05f)
                     };
                 default:
                     return Color.gray;
@@ -213,26 +202,19 @@ namespace ConquestGame
 
         private static Color HexOutlineColor(HexCellData cell)
         {
-            // 描边颜色更深，形成边框效果
-            switch (cell.CellType)
+            return cell.CellType switch
             {
-                case CellType.Plain:
-                    return new Color(0.1f, 0.1f, 0.12f);
-                case CellType.Castle:
-                    return Color.white;
-                case CellType.GoldMine:
-                    return new Color(0.5f, 0.4f, 0f);
-                default:
-                    return Color.black;
-            }
+                CellType.Plain => new Color(0.05f, 0.05f, 0.07f),
+                CellType.Castle => Color.white,
+                CellType.GoldMine => new Color(0.5f, 0.4f, 0f),
+                _ => Color.black
+            };
         }
 
         private void OnDestroy()
         {
             if (hexMesh != null) Destroy(hexMesh);
-            if (outlineMesh != null) Destroy(outlineMesh);
             if (hexMaterial != null) Destroy(hexMaterial);
-            if (outlineMaterial != null) Destroy(outlineMaterial);
         }
     }
 }
