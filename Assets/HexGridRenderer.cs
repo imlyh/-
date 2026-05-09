@@ -93,7 +93,20 @@ namespace ConquestGame
             u.Dispose(); ut.Dispose();
 
             hasBuilt = true;
-            Debug.Log($"[Grid] 构建完成");
+            Debug.Log("[Grid] 构建完成");
+
+            // 测试：在原点放一个明显的红色大 Cube
+            var test = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            test.name = "TEST_CUBE";
+            test.transform.position = Vector3.zero;
+            test.transform.localScale = Vector3.one * 2f;
+            var testMR = test.GetComponent<MeshRenderer>();
+            var testMat = new Material(Shader.Find("Universal Render Pipeline/Unlit")
+                                    ?? Shader.Find("Unlit/Color")
+                                    ?? Shader.Find("Sprites/Default"));
+            testMat.SetColor("_BaseColor", Color.red);
+            testMat.SetColor("_Color", Color.red);
+            testMR.sharedMaterial = testMat;
         }
 
         private void BuildCell(HexCellData cell, Vector3 worldPos)
