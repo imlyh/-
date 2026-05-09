@@ -41,18 +41,28 @@ namespace ConquestGame
             lookTarget = startLookTarget;
             currentZoom = initialDistance;
             UpdateCameraPosition();
+
+            // 确保纯色背景（非天空盒）
+            Camera cam = GetComponent<Camera>();
+            if (cam != null)
+            {
+                cam.backgroundColor = new Color(0.08f, 0.08f, 0.10f);
+                cam.clearFlags = CameraClearFlags.SolidColor;
+            }
+            Debug.Log($"[Camera] 初始化完成，注视 {lookTarget}，距离 {currentZoom}");
         }
 
         private void Update()
         {
-            HandlePan();
+            HandleMousePan();
+            HandleKeyboardPan();
             HandleZoom();
         }
 
         /// <summary>
-        /// 鼠标右键拖拽平移：在 XZ 平面上移动注视点
+        /// 鼠标右键拖拽平移
         /// </summary>
-        private void HandlePan()
+        private void HandleMousePan()
         {
             if (Input.GetMouseButtonDown(1))
                 lastMouse = Input.mousePosition;
@@ -61,20 +71,42 @@ namespace ConquestGame
             {
                 Vector3 delta = Input.mousePosition - lastMouse;
                 lastMouse = Input.mousePosition;
+                if (delta.magnitude < 0.5f) return;
 
-                // 屏幕坐标 → 世界 XZ 平面的移动量
-                // 摄像机俯角 ≈ 55°，Y 轴分量需要映射到 Z
                 Vector3 right = transform.right;
                 Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
 
-                lookTarget -= right * delta.x * panSpeed * 0.01f;
-                lookTarget -= forward * delta.y * panSpeed * 0.01f;
+                float factor = panSpeed * 0.01f * (currentZoom / initialDistance);
+                lookTarget -= right * delta.x * factor;
+                lookTarget -= forward * delta.y * factor;
 
-                lookTarget.x = Mathf.Clamp(lookTarget.x, minX, maxX);
-                lookTarget.z = Mathf.Clamp(lookTarget.z, minZ, maxZ);
-
-                UpdateCameraPosition();
+                ClampAndApply();
             }
+        }
+
+        /// <summary>
+        /// WASD 键盘备选平移
+        /// </summary>
+        private void HandleKeyboardPan()
+        {
+            float speed = panSpeed * 0.05f * (currentZoom / initialDistance);
+            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+            Vector3 right = transform.right;
+
+            bool moved = false;
+            if (Input.GetKey(KeyCode.W)) { lookTarget += forward * speed; moved = true; }
+            if (Input.GetKey(KeyCode.S)) { lookTarget -= forward * speed; moved = true; }
+            if (Input.GetKey(KeyCode.A)) { lookTarget -= right * speed; moved = true; }
+            if (Input.GetKey(KeyCode.D)) { lookTarget += right * speed; moved = true; }
+
+            if (moved) ClampAndApply();
+        }
+
+        private void ClampAndApply()
+        {
+            lookTarget.x = Mathf.Clamp(lookTarget.x, minX, maxX);
+            lookTarget.z = Mathf.Clamp(lookTarget.z, minZ, maxZ);
+            UpdateCameraPosition();
         }
 
         /// <summary>
