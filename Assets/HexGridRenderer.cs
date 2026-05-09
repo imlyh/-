@@ -5,7 +5,6 @@ using Unity.Transforms;
 
 namespace ConquestGame
 {
-    [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public class HexGridRenderer : MonoBehaviour
     {
         private Mesh hexMesh;
