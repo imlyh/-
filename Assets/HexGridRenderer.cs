@@ -76,9 +76,10 @@ namespace ConquestGame
                                           ComponentType.ReadOnly<LocalTransform>());
             var cells = q.ToComponentDataArray<HexCellData>(Allocator.Temp);
             var pos = q.ToComponentDataArray<LocalTransform>(Allocator.Temp);
-            if (cells.Length > 0)
+            int cellCount = cells.Length;
+            if (cellCount > 0)
             {
-                for (int i = 0; i < cells.Length; i++)
+                for (int i = 0; i < cellCount; i++)
                     BuildCell(cells[i], (Vector3)pos[i].Position);
             }
             cells.Dispose(); pos.Dispose();
@@ -92,21 +93,32 @@ namespace ConquestGame
                 BuildUnit(u[i], (Vector3)ut[i].Position);
             u.Dispose(); ut.Dispose();
 
-            hasBuilt = true;
-            Debug.Log("[Grid] 构建完成");
+            // 仅在真正有数据时才标记完成（ECS 可能还没生成实体）
+            if (cellCount > 0 || u.Length > 0)
+            {
+                hasBuilt = true;
+                Debug.Log($"[Grid] 构建完成：{cellCount} 格子 + {u.Length} 单位");
+            }
+            else
+            {
+                Debug.Log("[Grid] 等待 ECS 生成实体...");
+            }
 
-            // 测试：在原点放一个明显的红色大 Cube
-            var test = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            test.name = "TEST_CUBE";
-            test.transform.position = Vector3.zero;
-            test.transform.localScale = Vector3.one * 2f;
-            var testMR = test.GetComponent<MeshRenderer>();
-            var testMat = new Material(Shader.Find("Universal Render Pipeline/Unlit")
-                                    ?? Shader.Find("Unlit/Color")
-                                    ?? Shader.Find("Sprites/Default"));
-            testMat.SetColor("_BaseColor", Color.red);
-            testMat.SetColor("_Color", Color.red);
-            testMR.sharedMaterial = testMat;
+            // 测试 Cube（构建成功后删除这段代码）
+            if (hasBuilt)
+            {
+                var test = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                test.name = "TEST_CUBE";
+                test.transform.position = Vector3.zero;
+                test.transform.localScale = Vector3.one * 2f;
+                var testMR = test.GetComponent<MeshRenderer>();
+                var testMat = new Material(Shader.Find("Universal Render Pipeline/Unlit")
+                                        ?? Shader.Find("Unlit/Color")
+                                        ?? Shader.Find("Sprites/Default"));
+                testMat.SetColor("_BaseColor", Color.red);
+                testMat.SetColor("_Color", Color.red);
+                testMR.sharedMaterial = testMat;
+            }
         }
 
         private void BuildCell(HexCellData cell, Vector3 worldPos)
