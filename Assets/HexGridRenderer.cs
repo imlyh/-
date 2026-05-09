@@ -25,12 +25,38 @@ namespace ConquestGame
 {
     public class HexGridRenderer : MonoBehaviour
     {
+        // ===== Inspector 可调颜色 =====
+        [Header("边框")]
+        [SerializeField] private Color borderColor = Color.white;
+
+        [Header("城堡填充")]
+        [SerializeField] private Color castlePlayerColor = new Color(0f, 0.7f, 0.7f);
+        [SerializeField] private Color castleEnemyColor = new Color(0.7f, 0f, 0.7f);
+
+        [Header("金矿填充（无主/玩家/敌人）")]
+        [SerializeField] private Color mineFreeColor = new Color(0.9f, 0.7f, 0.05f);
+        [SerializeField] private Color minePlayerColor = new Color(0.2f, 0.6f, 0.2f);
+        [SerializeField] private Color mineEnemyColor = new Color(0.6f, 0.2f, 0.2f);
+
+        [Header("单位")]
+        [SerializeField] private Color playerUnitColor = Color.blue;
+        [SerializeField] private Color enemyUnitColor = Color.red;
+
+        [Header("背景")]
+        [SerializeField] private Color backgroundColor = new Color(0.08f, 0.08f, 0.10f);
+
+        [Header("摄像机")]
+        [SerializeField] private float cameraHeight = 15f;
+        [SerializeField] private float cameraSize = 11f;
+
+        // ===== 内部状态 =====
         private bool hasBuilt;
         private static Mesh borderMesh;
         private static Mesh fillMesh;
         private Material fillMaterialCastlePlayer, fillMaterialCastleEnemy;
         private Material fillMaterialMineFree, fillMaterialMinePlayer, fillMaterialMineEnemy;
         private Material borderMat;
+        private Material playerUnitMat, enemyUnitMat;
 
         /// <summary>
         /// 创建六边形边框 Mesh：外圈 + 内圈之间的环带
@@ -100,17 +126,15 @@ namespace ConquestGame
             var shader = Shader.Find("Universal Render Pipeline/Unlit")
                       ?? Shader.Find("Unlit/Color")
                       ?? Shader.Find("Sprites/Default");
-            Debug.Log($"[HexGrid] Shader={shader?.name ?? "NULL"}");
 
-            borderMat = new Material(shader);
-            borderMat.SetColor("_BaseColor", Color.white);
-            borderMat.SetColor("_Color", Color.white);
-
-            fillMaterialCastlePlayer = MakeMat(shader, new Color(0f, 0.7f, 0.7f));
-            fillMaterialCastleEnemy = MakeMat(shader, new Color(0.7f, 0f, 0.7f));
-            fillMaterialMineFree = MakeMat(shader, new Color(0.9f, 0.7f, 0.05f));
-            fillMaterialMinePlayer = MakeMat(shader, new Color(0.2f, 0.6f, 0.2f));
-            fillMaterialMineEnemy = MakeMat(shader, new Color(0.6f, 0.2f, 0.2f));
+            borderMat = MakeMat(shader, borderColor);
+            fillMaterialCastlePlayer = MakeMat(shader, castlePlayerColor);
+            fillMaterialCastleEnemy = MakeMat(shader, castleEnemyColor);
+            fillMaterialMineFree = MakeMat(shader, mineFreeColor);
+            fillMaterialMinePlayer = MakeMat(shader, minePlayerColor);
+            fillMaterialMineEnemy = MakeMat(shader, mineEnemyColor);
+            playerUnitMat = MakeMat(shader, playerUnitColor);
+            enemyUnitMat = MakeMat(shader, enemyUnitColor);
         }
 
         private static Material MakeMat(Shader s, Color c)
@@ -172,6 +196,10 @@ namespace ConquestGame
         }
 
         /// <summary>
+        /// 创建材质并设置颜色（UPR Unlit / 内置管线兼容）
+        /// </summary>
+
+        /// <summary>
         /// 为一个格子创建 GameObject，直接挂 MeshRenderer（边框）+ 可选子 Fill
         /// </summary>
         private void BuildCell(HexCellData cell, Vector3 worldPos)
@@ -211,8 +239,7 @@ namespace ConquestGame
             go.transform.localPosition = worldPos;
             go.transform.localScale = Vector3.one * 0.35f;
             var mr = go.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = MakeMat(borderMat.shader,
-                unit.Owner == OwnerType.Player ? Color.blue : Color.red);
+            mr.sharedMaterial = unit.Owner == OwnerType.Player ? playerUnitMat : enemyUnitMat;
         }
 
         /// <summary>
@@ -223,10 +250,10 @@ namespace ConquestGame
             var cam = Camera.main;
             if (cam == null) return;
             cam.orthographic = true;
-            cam.orthographicSize = 11f;
-            cam.transform.position = new Vector3(0f, 15f, 0f);
+            cam.orthographicSize = cameraSize;
+            cam.transform.position = new Vector3(0f, cameraHeight, 0f);
             cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            cam.backgroundColor = new Color(0.08f, 0.08f, 0.10f);
+            cam.backgroundColor = backgroundColor;
             cam.clearFlags = CameraClearFlags.SolidColor;
         }
     }
