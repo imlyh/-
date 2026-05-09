@@ -88,8 +88,8 @@ namespace ConquestGame
                 }
 
                 go.name = $"Hex_{cell.Coordinates}";
-                go.transform.position = pos;
-                go.transform.SetParent(transform);
+                go.transform.SetParent(transform, false);
+                go.transform.localPosition = pos;
 
                 var mr = go.GetComponent<MeshRenderer>();
                 var mat = new Material(Shader.Find(shaderName));
@@ -109,9 +109,9 @@ namespace ConquestGame
             {
                 var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 go.name = units[i].Owner == OwnerType.Player ? "PlayerUnit" : "EnemyUnit";
-                go.transform.position = (Vector3)ut[i].Position;
+                go.transform.SetParent(transform, false);
+                go.transform.localPosition = (Vector3)ut[i].Position;
                 go.transform.localScale = Vector3.one * 0.35f;
-                go.transform.SetParent(transform);
                 var mr = go.GetComponent<MeshRenderer>();
                 var mat = new Material(Shader.Find(shaderName));
                 var uc = units[i].Owner == OwnerType.Player ? Color.blue : Color.red;
