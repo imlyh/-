@@ -4,31 +4,23 @@ using Unity.Collections;
 using Unity.Transforms;
 
 /// ============================================================================
-/// GridRenderer — 用 Cube 在 Game 视图中渲染方形网格地图
+/// GridRenderer — 将 ECS 方形网格渲染到 Game 视图
 /// ============================================================================
 ///
 /// 【渲染方式】
-///   每个格子一个 Cube Primitive，缩成薄片（0.04 厚=边框，0.02 厚=填充）。
-///   Cube 是 Unity 内置 Primitive，保证在任何渲染管线都能正常显示。
+///   每个格子一个薄 Cube（0.96×0.04×0.96），边框颜色统一灰色。
+///   单位用彩色 Sphere 表示（蓝=玩家，红=敌人）。
+///   特殊建筑不额外填充，仅通过边框颜色区分（Inspector 中可调）。
 ///
-/// 【Inspector 参数】
-///   所有颜色、摄像机参数均在 Inspector 可调。
+/// 【使用方式】
+///   场景空 GameObject → 挂载 GridRenderer → Play 自动生成
 /// ============================================================================
 namespace ConquestGame
 {
     public class GridRenderer : MonoBehaviour
     {
         [Header("边框")]
-        [SerializeField] private Color borderColor = new Color(0.3f, 0.3f, 0.35f);
-
-        [Header("城堡")]
-        [SerializeField] private Color castlePlayerColor = new Color(0f, 0.7f, 0.7f);
-        [SerializeField] private Color castleEnemyColor = new Color(0.7f, 0f, 0.7f);
-
-        [Header("金矿")]
-        [SerializeField] private Color mineFreeColor = new Color(0.9f, 0.7f, 0.05f);
-        [SerializeField] private Color minePlayerColor = new Color(0.2f, 0.6f, 0.2f);
-        [SerializeField] private Color mineEnemyColor = new Color(0.6f, 0.2f, 0.2f);
+        [SerializeField] private Color borderColor = new Color(0.4f, 0.4f, 0.42f);
 
         [Header("单位")]
         [SerializeField] private Color playerUnitColor = Color.blue;
@@ -38,13 +30,11 @@ namespace ConquestGame
         [SerializeField] private Color backgroundColor = new Color(0.08f, 0.08f, 0.10f);
 
         [Header("摄像机")]
-        [SerializeField] private float cameraHeight = 15f;
-        [SerializeField] private float cameraSize = 7f;
+        [SerializeField] private Vector3 cameraPosition = new Vector3(4.5f, 12f, -5f);
+        [SerializeField] private Vector3 cameraLookAt = new Vector3(4.5f, 0f, 3.5f);
 
         private bool hasBuilt;
-        private Material borderMat, castlePlayerMat, castleEnemyMat;
-        private Material mineFreeMat, minePlayerMat, mineEnemyMat;
-        private Material playerUnitMat, enemyUnitMat;
+        private Material borderMat, playerUnitMat, enemyUnitMat;
 
         private void Awake()
         {
@@ -53,11 +43,6 @@ namespace ConquestGame
                       ?? Shader.Find("Sprites/Default");
 
             borderMat = MakeMat(shader, borderColor);
-            castlePlayerMat = MakeMat(shader, castlePlayerColor);
-            castleEnemyMat = MakeMat(shader, castleEnemyColor);
-            mineFreeMat = MakeMat(shader, mineFreeColor);
-            minePlayerMat = MakeMat(shader, minePlayerColor);
-            mineEnemyMat = MakeMat(shader, mineEnemyColor);
             playerUnitMat = MakeMat(shader, playerUnitColor);
             enemyUnitMat = MakeMat(shader, enemyUnitColor);
         }
@@ -93,7 +78,6 @@ namespace ConquestGame
                 BuildUnit(u[i], (Vector3)ut[i].Position);
             u.Dispose(); ut.Dispose();
 
-            // 仅在真正有数据时才标记完成（ECS 可能还没生成实体）
             if (cellCount > 0 || u.Length > 0)
             {
                 hasBuilt = true;
@@ -103,24 +87,11 @@ namespace ConquestGame
             {
                 Debug.Log("[Grid] 等待 ECS 生成实体...");
             }
-
-            // 测试 Cube（构建成功后删除这段代码）
-            if (hasBuilt)
-            {
-                var test = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                test.name = "TEST_CUBE";
-                test.transform.position = Vector3.zero;
-                test.transform.localScale = Vector3.one * 2f;
-                var testMR = test.GetComponent<MeshRenderer>();
-                var testMat = new Material(Shader.Find("Universal Render Pipeline/Unlit")
-                                        ?? Shader.Find("Unlit/Color")
-                                        ?? Shader.Find("Sprites/Default"));
-                testMat.SetColor("_BaseColor", Color.red);
-                testMat.SetColor("_Color", Color.red);
-                testMR.sharedMaterial = testMat;
-            }
         }
 
+        /// <summary>
+        /// 为每个格子创建一个灰色薄 Cube 作为边框标记
+        /// </summary>
         private void BuildCell(HexCellData cell, Vector3 worldPos)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -130,23 +101,12 @@ namespace ConquestGame
             go.transform.localScale = new Vector3(0.96f, 0.04f, 0.96f);
             Destroy(go.GetComponent<Collider>());
 
-            var mr = go.GetComponent<MeshRenderer>();
-            mr.sharedMaterial = borderMat;
-
-            // 特殊建筑：在上面叠一层填充
-            var fillMat = PickFillMat(cell);
-            if (fillMat != null)
-            {
-                var fill = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                fill.name = "Fill";
-                fill.transform.SetParent(go.transform, false);
-                fill.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-                fill.transform.localScale = new Vector3(0.88f, 0.02f, 0.88f);
-                Destroy(fill.GetComponent<Collider>());
-                fill.GetComponent<MeshRenderer>().sharedMaterial = fillMat;
-            }
+            go.GetComponent<MeshRenderer>().sharedMaterial = borderMat;
         }
 
+        /// <summary>
+        /// 为单位创建 Sphere
+        /// </summary>
         private void BuildUnit(UnitData unit, Vector3 worldPos)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -159,20 +119,6 @@ namespace ConquestGame
                 unit.Owner == OwnerType.Player ? playerUnitMat : enemyUnitMat;
         }
 
-        private Material PickFillMat(HexCellData cell)
-        {
-            if (cell.CellType == CellType.Castle)
-                return cell.Owner == OwnerType.Player ? castlePlayerMat : castleEnemyMat;
-            if (cell.CellType == CellType.GoldMine)
-                return cell.Owner switch
-                {
-                    OwnerType.Player => minePlayerMat,
-                    OwnerType.Enemy => mineEnemyMat,
-                    _ => mineFreeMat
-                };
-            return null;
-        }
-
         private static Material MakeMat(Shader s, Color c)
         {
             var m = new Material(s);
@@ -181,14 +127,16 @@ namespace ConquestGame
             return m;
         }
 
+        /// <summary>
+        /// 设置透视摄像机，视角从上方倾斜俯视地图中心
+        /// </summary>
         private void SetupCamera()
         {
             var cam = Camera.main;
             if (cam == null) return;
-            cam.orthographic = true;
-            cam.orthographicSize = cameraSize;
-            cam.transform.position = new Vector3(5f, cameraHeight, 4f);
-            cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            cam.orthographic = false;
+            cam.transform.position = cameraPosition;
+            cam.transform.LookAt(cameraLookAt);
             cam.backgroundColor = backgroundColor;
             cam.clearFlags = CameraClearFlags.SolidColor;
         }
