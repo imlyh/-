@@ -6,7 +6,7 @@ namespace ConquestGame
     /// 六边形轴向坐标 (Axial Coordinates)
     /// q = column, r = row
     /// </summary>
-    public struct HexCoordinates
+    public struct HexCoordinates : System.IEquatable<HexCoordinates>
     {
         public int q;
         public int r;
@@ -43,6 +43,8 @@ namespace ConquestGame
 
         public static bool operator !=(HexCoordinates a, HexCoordinates b) =>
             !(a == b);
+
+        public bool Equals(HexCoordinates other) => this == other;
 
         public override bool Equals(object obj) =>
             obj is HexCoordinates other && this == other;

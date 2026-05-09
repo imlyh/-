@@ -1,5 +1,6 @@
 using Unity.Entities;
 using Unity.Collections;
+using Unity.Mathematics;
 
 namespace ConquestGame
 {
@@ -17,7 +18,6 @@ namespace ConquestGame
             float dt = SystemAPI.Time.DeltaTime;
             var gameTime = SystemAPI.GetSingleton<GameTimeData>();
             var ecb = new EntityCommandBuffer(state.WorldUpdateAllocator);
-            bool anyFighting = false;
 
             // 先收集所有非移动状态单位的位置信息
             var positionMap = new NativeHashMap<HexCoordinates, BattleEntry>(256, state.WorldUpdateAllocator);
@@ -69,7 +69,6 @@ namespace ConquestGame
 
                 // 进入战斗状态
                 unit.ValueRW.State = UnitState.Fighting;
-                anyFighting = true;
 
                 // 战斗计时
                 unit.ValueRW.CombatTimer += dt * gameTime.SpeedMultiplier;
