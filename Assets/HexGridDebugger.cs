@@ -2,24 +2,17 @@ using UnityEngine;
 using Unity.Entities;
 using Unity.Collections;
 using Unity.Transforms;
-using Unity.Mathematics;
 
 namespace ConquestGame
 {
     [ExecuteAlways]
     public class HexGridDebugger : MonoBehaviour
     {
-        private static readonly Vector3[] HexCorners = new Vector3[6];
-        private const float HexRadius = 0.55f;
-        private const float Sqrt3 = 1.7320508f;
+        private Mesh hexMesh;
 
-        static HexGridDebugger()
+        private void Awake()
         {
-            for (int i = 0; i < 6; i++)
-            {
-                float angle = 60f * i * Mathf.Deg2Rad;
-                HexCorners[i] = new Vector3(Mathf.Cos(angle) * HexRadius, 0f, Mathf.Sin(angle) * HexRadius);
-            }
+            hexMesh = CreateHexMesh(0.5f);
         }
 
         private void OnDrawGizmos()
@@ -33,7 +26,7 @@ namespace ConquestGame
 
             var entityManager = world.EntityManager;
 
-            // === 绘制 HexCell 六边形 ===
+            // === HexCell ===
             var cellQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<HexCellData>(),
                 ComponentType.ReadOnly<LocalTransform>());
@@ -43,47 +36,37 @@ namespace ConquestGame
 
             for (int i = 0; i < cells.Length; i++)
             {
-                var center = (Vector3)transforms[i].Position;
+                var pos = transforms[i].Position;
                 var cell = cells[i];
 
-                Color fillColor = cell.CellType switch
+                Color color = cell.CellType switch
                 {
                     CellType.Plain => cell.Owner switch
                     {
-                        OwnerType.Player => new Color(0f, 0.8f, 0f, 0.4f),
-                        OwnerType.Enemy => new Color(0.8f, 0f, 0f, 0.4f),
-                        _ => new Color(0.3f, 0.3f, 0.3f, 0.3f)
+                        OwnerType.Player => new Color(0.1f, 0.7f, 0.1f),
+                        OwnerType.Enemy => new Color(0.7f, 0.1f, 0.1f),
+                        _ => new Color(0.25f, 0.25f, 0.25f)
                     },
                     CellType.Castle => cell.Owner == OwnerType.Player
-                        ? new Color(0f, 1f, 1f, 0.5f)
-                        : new Color(1f, 0f, 1f, 0.5f),
+                        ? new Color(0f, 0.8f, 0.8f)
+                        : new Color(0.8f, 0f, 0.8f),
                     CellType.GoldMine => cell.Owner switch
                     {
-                        OwnerType.Player => new Color(0f, 0.8f, 0f, 0.5f),
-                        OwnerType.Enemy => new Color(0.8f, 0f, 0f, 0.5f),
-                        _ => new Color(1f, 0.8f, 0f, 0.5f)
+                        OwnerType.Player => new Color(0.1f, 0.7f, 0.1f),
+                        OwnerType.Enemy => new Color(0.7f, 0.1f, 0.1f),
+                        _ => new Color(0.9f, 0.7f, 0f)
                     },
                     _ => Color.gray
                 };
 
-                // 用六个三角形拼成实心六边形
-                DrawHexFill(center, fillColor);
-
-                // 六边形边线
-                Gizmos.color = cell.CellType switch
-                {
-                    CellType.Plain => new Color(0.6f, 0.6f, 0.6f, 0.5f),
-                    CellType.Castle => Color.white,
-                    CellType.GoldMine => new Color(1f, 0.8f, 0f, 0.8f),
-                    _ => Color.white
-                };
-                DrawHexWire(center);
+                Gizmos.color = color;
+                Gizmos.DrawMesh(hexMesh, pos, Quaternion.identity, Vector3.one);
             }
 
             cells.Dispose();
             transforms.Dispose();
 
-            // === 绘制 Unit ===
+            // === Unit ===
             var unitQuery = entityManager.CreateEntityQuery(
                 ComponentType.ReadOnly<UnitData>(),
                 ComponentType.ReadOnly<LocalTransform>());
@@ -97,49 +80,38 @@ namespace ConquestGame
                 var unit = units[i];
 
                 Gizmos.color = unit.Owner == OwnerType.Player
-                    ? new Color(0.2f, 0.5f, 1f, 0.9f)
-                    : new Color(1f, 0.2f, 0.2f, 0.9f);
-                Gizmos.DrawSphere(pos, 0.3f);
-                Gizmos.color = Color.white;
-                Gizmos.DrawWireSphere(pos, 0.33f);
-
-#if UNITY_EDITOR
-                UnityEditor.Handles.color = Color.white;
-                UnityEditor.Handles.Label(
-                    pos + Vector3.up * 0.5f,
-                    $"{(unit.Owner == OwnerType.Player ? "玩家" : "敌人")} HP:{unit.Health}/{unit.MaxHealth} ATK:{unit.Attack}");
-#endif
+                    ? Color.blue : Color.red;
+                Gizmos.DrawSphere(pos, 0.25f);
             }
 
             units.Dispose();
             unitTransforms.Dispose();
         }
 
-        private static void DrawHexFill(Vector3 center, Color color)
+        private static Mesh CreateHexMesh(float radius)
         {
-#if UNITY_EDITOR
-            UnityEditor.Handles.color = color;
+            var mesh = new Mesh();
             var verts = new Vector3[7];
             for (int i = 0; i < 6; i++)
-                verts[i] = center + HexCorners[i];
-            verts[6] = center + HexCorners[0];
-            // 用三角形扇形填充
-            for (int i = 0; i < 6; i++)
             {
-                UnityEditor.Handles.DrawAAConvexPolygon(
-                    new[] { center, center + HexCorners[i], center + HexCorners[(i + 1) % 6] });
+                float angle = 60f * i * Mathf.Deg2Rad;
+                verts[i] = new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
             }
-#endif
-        }
+            verts[6] = Vector3.zero;
 
-        private static void DrawHexWire(Vector3 center)
-        {
+            var tris = new int[18]; // 6 triangles × 3
             for (int i = 0; i < 6; i++)
             {
-                var a = center + HexCorners[i];
-                var b = center + HexCorners[(i + 1) % 6];
-                Gizmos.DrawLine(a, b);
+                tris[i * 3] = 6;
+                tris[i * 3 + 1] = i;
+                tris[i * 3 + 2] = (i + 1) % 6;
             }
+
+            mesh.vertices = verts;
+            mesh.triangles = tris;
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
     }
 }
