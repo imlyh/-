@@ -47,8 +47,8 @@ namespace ConquestGame
         /// </summary>
         private static Mesh CreateBorderMesh()
         {
-            const float outerR = 0.50f;
-            const float innerR = 0.46f;
+            const float outerR = 0.52f;
+            const float innerR = 0.42f;
 
             var verts = new Vector3[12];
             var tris = new int[36];
@@ -126,9 +126,10 @@ namespace ConquestGame
                       ?? Shader.Find("Sprites/Default");
 
             borderMaterial = new Material(shader);
-            borderMaterial.color = Color.black;
-            borderMaterial.SetColor("_BaseColor", Color.black);
-            borderMaterial.SetColor("_Color", Color.black);
+            // 白色边框，清晰可见
+            borderMaterial.color = Color.white;
+            borderMaterial.SetColor("_BaseColor", Color.white);
+            borderMaterial.SetColor("_Color", Color.white);
         }
 
         /// <summary>
@@ -262,7 +263,7 @@ namespace ConquestGame
         private static void SetupCamera()
         {
             var cam = Camera.main;
-            if (cam == null || cam.orthographic)
+            if (cam == null)
                 return;
             cam.orthographic = true;
             cam.orthographicSize = 11f;
