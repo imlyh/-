@@ -44,7 +44,7 @@ namespace ConquestGame
             hasGenerated = true;
 
             var map = SystemAPI.GetSingletonRW<MapSettingsData>();
-            int w = 10, h = 8;
+            int w = 100, h = 100;
             var ecb = new EntityCommandBuffer(state.WorldUpdateAllocator);
 
             // === 生成矩形网格（城堡和金矿都在网格内）===

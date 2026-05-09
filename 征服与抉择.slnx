@@ -1,3 +1,4 @@
 ﻿<Solution>
   <Project Path="ConquestGame.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
 </Solution>

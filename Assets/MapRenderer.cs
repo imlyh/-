@@ -179,10 +179,12 @@ namespace ConquestGame
                 var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 go.name = MapObjectName(cells[i]);
                 go.transform.SetParent(parent.transform);
-                go.transform.position = wp + Vector3.up * 0.25f;
+                float h = cells[i].CellType == CellType.Castle ? 0.5f : 0.3f;
+                go.transform.position = wp + Vector3.up * (h * 0.5f);
+                // 边长与格子一致（1×1），高度按建筑类型区分
                 go.transform.localScale = cells[i].CellType == CellType.Castle
-                    ? new Vector3(0.9f, 0.5f, 0.9f)
-                    : new Vector3(0.7f, 0.3f, 0.7f);
+                    ? new Vector3(1f, 0.5f, 1f)
+                    : new Vector3(1f, 0.3f, 1f);
                 Destroy(go.GetComponent<Collider>());
                 go.GetComponent<MeshRenderer>().sharedMaterial = MakeOpaqueMat(color);
                 staticObjects.Add(go);
