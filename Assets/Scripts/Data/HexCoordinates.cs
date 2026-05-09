@@ -1,15 +1,22 @@
 using Unity.Mathematics;
+using System;
 
+/// ============================================================================
+/// GridCoordinates — 方形网格坐标，类名保留 HexCoordinates 兼容旧引用
+/// ============================================================================
+///
+/// 【设计思路】
+///   用整数 (q, r) 表示方形网格中的格子位置。
+///   q = 列（Column），r = 行（Row），对应世界 X 和 Z 轴。
+///   相邻格子通过 Directions 数组的 4 个方向（右/上/左/下）访问。
+///   距离 = 曼哈顿距离 |Δq| + |Δr|
+/// ============================================================================
 namespace ConquestGame
 {
-    /// <summary>
-    /// 六边形轴向坐标 (Axial Coordinates)
-    /// q = column, r = row
-    /// </summary>
-    public struct HexCoordinates : System.IEquatable<HexCoordinates>
+    public struct HexCoordinates : IEquatable<HexCoordinates>
     {
-        public int q;
-        public int r;
+        public int q; // 列 (Column / X)
+        public int r; // 行 (Row / Z)
 
         public HexCoordinates(int q, int r)
         {
@@ -17,22 +24,23 @@ namespace ConquestGame
             this.r = r;
         }
 
-        // 六个方向邻居的偏移量
+        /// <summary>
+        /// 四方向邻居偏移（右/上/左/下）
+        /// </summary>
         public static readonly HexCoordinates[] Directions = new[]
         {
             new HexCoordinates(+1,  0), // 右
-            new HexCoordinates(+1, -1), // 右上
-            new HexCoordinates( 0, -1), // 左上
+            new HexCoordinates( 0, +1), // 上
             new HexCoordinates(-1,  0), // 左
-            new HexCoordinates(-1, +1), // 左下
-            new HexCoordinates( 0, +1), // 右下
+            new HexCoordinates( 0, -1), // 下
         };
 
+        /// <summary>
+        /// 曼哈顿距离（四方向网格路径距离）
+        /// </summary>
         public int DistanceTo(HexCoordinates other)
         {
-            int s1 = -q - r;
-            int s2 = -other.q - other.r;
-            return (math.abs(q - other.q) + math.abs(r - other.r) + math.abs(s1 - s2)) / 2;
+            return math.abs(q - other.q) + math.abs(r - other.r);
         }
 
         public static HexCoordinates operator +(HexCoordinates a, HexCoordinates b) =>

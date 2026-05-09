@@ -4,28 +4,29 @@ using Unity.Collections;
 using Unity.Transforms;
 
 /// ============================================================================
-/// HexGridRenderer — 将 ECS 六边形地图渲染到 Game 视图
+/// GridRenderer — 将 ECS 方形网格地图渲染到 Game 视图
 /// ============================================================================
 ///
 /// 【设计思路】
-///   为每个 HexCell 创建一个 GameObject，挂载自定义六边形 Mesh。
-///   普通格子只画边框（六边形环），城堡和金矿额外叠加实心填充层。
-///   所有同类型格子共享同一个 Mesh（sharedMesh）节省内存。
+///   每个格子是 1×1 的紧密排列方形。边框使用方框 Mesh（外框 0.50×0.50，
+///   内框 0.46×0.46），填充使用实心方形 Mesh（0.45×0.45）。
+///   所有普通格子只渲染边框，城堡和金矿额外渲染彩色填充。
 ///
-/// 【渲染层级】
-///   每个 Cell GameObject 上有：
-///     - MeshFilter + MeshRenderer → 六边形边框（所有格子）
-///     - 额外子对象 Fill → 实心填充（仅城堡/金矿）
+/// 【渲染结构】
+///   GridRenderer（本脚本）
+///     ├── Cell_* × N           → MeshRenderer 渲染边框
+///     │   └── Fill（可选）      → 城堡/金矿的实心填充
+///     ├── PlayerUnit            → 蓝色 Sphere
+///     └── EnemyWarrior          → 红色 Sphere
 ///
-/// 【关键参数】
-///   边框外径 0.52 / 内径 0.42，填充半径 0.41
-///   六边形紧密排列，相邻格子中心距 ≈ 1 个单位
+/// 【Inspector 参数】
+///   边框、填充、单位、背景、摄像机均可调颜色
 /// ============================================================================
 namespace ConquestGame
 {
-    public class HexGridRenderer : MonoBehaviour
+    public class GridRenderer : MonoBehaviour
     {
-        // ===== Inspector 可调颜色 =====
+        // ===== Inspector 颜色 =====
         [Header("边框")]
         [SerializeField] private Color borderColor = Color.white;
 
@@ -47,78 +48,63 @@ namespace ConquestGame
 
         [Header("摄像机")]
         [SerializeField] private float cameraHeight = 15f;
-        [SerializeField] private float cameraSize = 11f;
+        [SerializeField] private float cameraSize = 7f;
 
         // ===== 内部状态 =====
         private bool hasBuilt;
         private static Mesh borderMesh;
         private static Mesh fillMesh;
-        private Material fillMaterialCastlePlayer, fillMaterialCastleEnemy;
-        private Material fillMaterialMineFree, fillMaterialMinePlayer, fillMaterialMineEnemy;
         private Material borderMat;
+        private Material castlePlayerMat, castleEnemyMat;
+        private Material mineFreeMat, minePlayerMat, mineEnemyMat;
         private Material playerUnitMat, enemyUnitMat;
 
+        // ===== 共享 Mesh 创建 =====
+
         /// <summary>
-        /// 创建六边形边框 Mesh：外圈 + 内圈之间的环带
-        /// </summary>
-        /// <summary>
-        /// 创建尖顶六边形边框 Mesh（匹配 R = 0.5 的无缝排列）
+        /// 创建方框 Mesh：外框 0.50 内框 0.46，形成 0.04 宽的边框线
         /// </summary>
         private static Mesh CreateBorderMesh()
         {
-            const float outer = 0.50f, inner = 0.45f;
-            var verts = new Vector3[12];
-            var tris = new int[36];
-            for (int i = 0; i < 6; i++)
+            const float o = 0.50f, i = 0.46f;
+            // 8 个顶点：外框 4 个 + 内框 4 个
+            var verts = new Vector3[] {
+                new(-o, 0f, -o), new( o, 0f, -o), new( o, 0f,  o), new(-o, 0f,  o), // outer
+                new(-i, 0f, -i), new( i, 0f, -i), new( i, 0f,  i), new(-i, 0f,  i), // inner
+            };
+            // 4 个 quad → 8 个三角形 = 24 个索引
+            var tris = new int[24];
+            for (int e = 0; e < 4; e++)
             {
-                float a = (90f + 60f * i) * Mathf.Deg2Rad;
-                float x = Mathf.Cos(a), z = Mathf.Sin(a);
-                verts[i] = new Vector3(x * outer, 0f, z * outer);
-                verts[i + 6] = new Vector3(x * inner, 0f, z * inner);
+                int n = (e + 1) % 4;
+                int t = e * 6;
+                tris[t + 0] = e; tris[t + 1] = n; tris[t + 2] = e + 4;
+                tris[t + 3] = e + 4; tris[t + 4] = n; tris[t + 5] = n + 4;
             }
-            for (int i = 0; i < 6; i++)
-            {
-                int n = (i + 1) % 6;
-                int t = i * 6;
-                tris[t + 0] = i; tris[t + 1] = n; tris[t + 2] = i + 6;
-                tris[t + 3] = i + 6; tris[t + 4] = n; tris[t + 5] = n + 6;
-            }
-            var m = new Mesh { name = "HexBorder" };
+            var m = new Mesh { name = "SquareBorder" };
             m.vertices = verts; m.triangles = tris;
             m.RecalculateNormals(); m.RecalculateBounds();
             return m;
         }
 
         /// <summary>
-        /// 创建尖顶六边形实心填充 Mesh（半径 0.44，略小于边框内径）
+        /// 创建实心方形 Mesh：0.45×0.45
         /// </summary>
         private static Mesh CreateFillMesh()
         {
-            const float r = 0.44f;
-            var verts = new Vector3[7];
-            var tris = new int[18];
-            verts[0] = Vector3.zero;
-            for (int i = 0; i < 6; i++)
-            {
-                float a = (90f + 60f * i) * Mathf.Deg2Rad;
-                verts[i + 1] = new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
-            }
-            for (int i = 0; i < 6; i++)
-            {
-                int n = (i + 1) % 6;
-                tris[i * 3 + 0] = 0;
-                tris[i * 3 + 1] = i + 1;
-                tris[i * 3 + 2] = n + 1;
-            }
-            var m = new Mesh { name = "HexFill" };
+            const float r = 0.45f;
+            var verts = new Vector3[] {
+                new(-r, 0f, -r), new( r, 0f, -r), new( r, 0f,  r), new(-r, 0f,  r)
+            };
+            var tris = new int[] { 0, 1, 2, 0, 2, 3 };
+            var m = new Mesh { name = "SquareFill" };
             m.vertices = verts; m.triangles = tris;
             m.RecalculateNormals(); m.RecalculateBounds();
             return m;
         }
 
-        /// <summary>
-        /// Awake：创建共享 Mesh + 材质缓存
-        /// </summary>
+        // ===== Unity 生命周期 =====
+
         private void Awake()
         {
             if (borderMesh == null) borderMesh = CreateBorderMesh();
@@ -129,71 +115,38 @@ namespace ConquestGame
                       ?? Shader.Find("Sprites/Default");
 
             borderMat = MakeMat(shader, borderColor);
-            fillMaterialCastlePlayer = MakeMat(shader, castlePlayerColor);
-            fillMaterialCastleEnemy = MakeMat(shader, castleEnemyColor);
-            fillMaterialMineFree = MakeMat(shader, mineFreeColor);
-            fillMaterialMinePlayer = MakeMat(shader, minePlayerColor);
-            fillMaterialMineEnemy = MakeMat(shader, mineEnemyColor);
+            castlePlayerMat = MakeMat(shader, castlePlayerColor);
+            castleEnemyMat = MakeMat(shader, castleEnemyColor);
+            mineFreeMat = MakeMat(shader, mineFreeColor);
+            minePlayerMat = MakeMat(shader, minePlayerColor);
+            mineEnemyMat = MakeMat(shader, mineEnemyColor);
             playerUnitMat = MakeMat(shader, playerUnitColor);
             enemyUnitMat = MakeMat(shader, enemyUnitColor);
         }
 
-        private static Material MakeMat(Shader s, Color c)
-        {
-            var m = new Material(s);
-            m.SetColor("_BaseColor", c); m.SetColor("_Color", c);
-            return m;
-        }
-
-        /// <summary>
-        /// 选取填充材质
-        /// </summary>
-        private Material PickFillMat(HexCellData cell)
-        {
-            if (cell.CellType == CellType.Castle)
-                return cell.Owner == OwnerType.Player ? fillMaterialCastlePlayer : fillMaterialCastleEnemy;
-            if (cell.CellType == CellType.GoldMine)
-                return cell.Owner switch
-                {
-                    OwnerType.Player => fillMaterialMinePlayer,
-                    OwnerType.Enemy => fillMaterialMineEnemy,
-                    _ => fillMaterialMineFree
-                };
-            return null;
-        }
-
-        /// <summary>
-        /// Update：首个有效帧构建所有渲染对象
-        /// </summary>
         private void Update()
         {
             if (!Application.isPlaying || hasBuilt) return;
 
             var world = World.DefaultGameObjectInjectionWorld;
             if (world == null || !world.IsCreated) return;
+
             var em = world.EntityManager;
             SetupCamera();
 
-            var q = em.CreateEntityQuery(ComponentType.ReadOnly<HexCellData>(),
-                                          ComponentType.ReadOnly<LocalTransform>());
+            var q = em.CreateEntityQuery(
+                ComponentType.ReadOnly<HexCellData>(),
+                ComponentType.ReadOnly<LocalTransform>());
             var cells = q.ToComponentDataArray<HexCellData>(Allocator.Temp);
             var pos = q.ToComponentDataArray<LocalTransform>(Allocator.Temp);
             if (cells.Length == 0) { cells.Dispose(); pos.Dispose(); return; }
 
-            // 缓存世界坐标用于 LateUpdate 的 Debug.DrawLine
-            cellCount = cells.Length;
-            cellPositions = new Vector3[cellCount];
-
             for (int i = 0; i < cells.Length; i++)
-            {
-                Vector3 wp = (Vector3)pos[i].Position;
-                cellPositions[i] = wp;
-                BuildCell(cells[i], wp);
-            }
+                BuildCell(cells[i], (Vector3)pos[i].Position);
 
-            // 单位
-            var uq = em.CreateEntityQuery(ComponentType.ReadOnly<UnitData>(),
-                                           ComponentType.ReadOnly<LocalTransform>());
+            var uq = em.CreateEntityQuery(
+                ComponentType.ReadOnly<UnitData>(),
+                ComponentType.ReadOnly<LocalTransform>());
             var u = uq.ToComponentDataArray<UnitData>(Allocator.Temp);
             var ut = uq.ToComponentDataArray<LocalTransform>(Allocator.Temp);
             for (int i = 0; i < u.Length; i++)
@@ -201,29 +154,27 @@ namespace ConquestGame
 
             u.Dispose(); ut.Dispose(); cells.Dispose(); pos.Dispose();
             hasBuilt = true;
-            Debug.Log($"[HexGrid] 构建完成");
+            Debug.Log($"[Grid] 构建完成：{cells.Length} 格子 + {u.Length} 单位");
         }
 
-        /// <summary>
-        /// 创建材质并设置颜色（UPR Unlit / 内置管线兼容）
-        /// </summary>
+        // ===== 构建逻辑 =====
 
         /// <summary>
-        /// 为一个格子创建 GameObject，直接挂 MeshRenderer（边框）+ 可选子 Fill
+        /// 为一个格子创建 GameObject：边框（必备）+ 填充（仅特殊建筑）
         /// </summary>
         private void BuildCell(HexCellData cell, Vector3 worldPos)
         {
-            var go = new GameObject($"Hex_{cell.Coordinates}");
+            var go = new GameObject($"Cell_{cell.Coordinates}");
             go.transform.SetParent(transform, false);
             go.transform.localPosition = worldPos;
 
-            // 边框 Mesh（直接在根节点上）
+            // 边框
             var mf = go.AddComponent<MeshFilter>();
             mf.sharedMesh = borderMesh;
             var mr = go.AddComponent<MeshRenderer>();
             mr.sharedMaterial = borderMat;
 
-            // 填充层（仅特殊建筑）
+            // 填充层
             var fillMat = PickFillMat(cell);
             if (fillMat != null)
             {
@@ -238,7 +189,7 @@ namespace ConquestGame
         }
 
         /// <summary>
-        /// 为单位创建 Sphere
+        /// 为单位创建球形标记
         /// </summary>
         private void BuildUnit(UnitData unit, Vector3 worldPos)
         {
@@ -249,53 +200,41 @@ namespace ConquestGame
             go.transform.localScale = Vector3.one * 0.35f;
             var mr = go.GetComponent<MeshRenderer>();
             mr.sharedMaterial = unit.Owner == OwnerType.Player ? playerUnitMat : enemyUnitMat;
+            Destroy(go.GetComponent<Collider>());
         }
 
-        // 缓存格子的世界坐标用于 Debug 绘制
-        private Vector3[] cellPositions;
-        private int cellCount;
-
-        /// <summary>
-        /// 每帧用 Debug.DrawLine 绘制六边形边框（Game/Scene 视图均可见）
-        /// </summary>
-        private void LateUpdate()
+        private Material PickFillMat(HexCellData cell)
         {
-            if (!hasBuilt || cellPositions == null)
-                return;
-
-            const float r = 0.50f;
-            var corners = new Vector3[6];
-            Color borderC = borderColor;
-
-            for (int i = 0; i < cellCount; i++)
-            {
-                Vector3 center = cellPositions[i];
-
-                // 计算六边形 6 个角
-                for (int j = 0; j < 6; j++)
+            if (cell.CellType == CellType.Castle)
+                return cell.Owner == OwnerType.Player ? castlePlayerMat : castleEnemyMat;
+            if (cell.CellType == CellType.GoldMine)
+                return cell.Owner switch
                 {
-                    float a = (90f + 60f * j) * Mathf.Deg2Rad;
-                    corners[j] = center + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
-                }
-
-                // 画出 6 条边
-                for (int j = 0; j < 6; j++)
-                {
-                    Debug.DrawLine(corners[j], corners[(j + 1) % 6], borderC, 0f, false);
-                }
-            }
+                    OwnerType.Player => minePlayerMat,
+                    OwnerType.Enemy => mineEnemyMat,
+                    _ => mineFreeMat
+                };
+            return null;
         }
 
-        /// <summary>
-        /// 自动设置摄像机
-        /// </summary>
+        // ===== 辅助 =====
+
+        private static Material MakeMat(Shader s, Color c)
+        {
+            var m = new Material(s);
+            m.color = c;
+            m.SetColor("_BaseColor", c);
+            m.SetColor("_Color", c);
+            return m;
+        }
+
         private void SetupCamera()
         {
             var cam = Camera.main;
             if (cam == null) return;
             cam.orthographic = true;
             cam.orthographicSize = cameraSize;
-            cam.transform.position = new Vector3(0f, cameraHeight, 0f);
+            cam.transform.position = new Vector3(4.5f, cameraHeight, 3.5f);
             cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             cam.backgroundColor = backgroundColor;
             cam.clearFlags = CameraClearFlags.SolidColor;
