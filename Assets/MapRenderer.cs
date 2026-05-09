@@ -65,10 +65,16 @@ namespace ConquestGame
 
             if (!hasBuilt)
             {
-                BuildTerrain();
-                BuildGridLines();
-                BuildStaticObjects(world);
-                hasBuilt = true;
+                // 地形和网格线只建一次
+                if (transform.Find("Terrain") == null)
+                {
+                    BuildTerrain();
+                    BuildGridLines();
+                }
+
+                // 建筑必须等 ECS 有数据才建，没数据时每帧重试
+                if (BuildStaticObjects(world))
+                    hasBuilt = true;
             }
 
             SyncUnitPositions(world);
@@ -153,7 +159,7 @@ namespace ConquestGame
         /// <summary>
         /// 一次性创建城堡和金矿的静态方块
         /// </summary>
-        private void BuildStaticObjects(World world)
+        private bool BuildStaticObjects(World world)
         {
             var em = world.EntityManager;
             var parent = new GameObject("Structures");
@@ -163,7 +169,9 @@ namespace ConquestGame
                                           ComponentType.ReadOnly<LocalTransform>());
             var cells = q.ToComponentDataArray<HexCellData>(Allocator.Temp);
             var pos = q.ToComponentDataArray<LocalTransform>(Allocator.Temp);
+            if (cells.Length == 0) { cells.Dispose(); pos.Dispose(); return false; }
 
+            int built = 0;
             for (int i = 0; i < cells.Length; i++)
             {
                 Vector3 wp = (Vector3)pos[i].Position;
@@ -188,9 +196,12 @@ namespace ConquestGame
                 Destroy(go.GetComponent<Collider>());
                 go.GetComponent<MeshRenderer>().sharedMaterial = MakeOpaqueMat(color);
                 staticObjects.Add(go);
+                built++;
             }
 
             cells.Dispose(); pos.Dispose();
+            Debug.Log($"[Map] 静态建筑：{built} 个");
+            return true;
         }
 
         /// <summary>
