@@ -51,12 +51,18 @@ namespace ConquestGame
             var cells = query.ToComponentDataArray<HexCellData>(Allocator.Temp);
             var transforms = query.ToComponentDataArray<LocalTransform>(Allocator.Temp);
 
+            Debug.Log($"[HexGrid] cells count: {cells.Length}");
+
             if (cells.Length == 0)
             {
                 cells.Dispose();
                 transforms.Dispose();
                 return;
             }
+
+            var shader1 = Shader.Find("Custom/VertexColorUnlit");
+            var shader2 = Shader.Find("Universal Render Pipeline/Unlit");
+            Debug.Log($"[HexGrid] VertexColorUnlit shader: {shader1 != null}, URP Unlit: {shader2 != null}");
 
             BuildHexMesh(cells, transforms);
             BuildOutlineMesh(cells, transforms);
