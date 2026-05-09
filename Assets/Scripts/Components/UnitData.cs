@@ -11,6 +11,8 @@ namespace ConquestGame
         public float MoveSpeed;
         public OwnerType Owner;
         public UnitState State;
+        public HexCoordinates CurrentPosition;
         public HexCoordinates TargetPosition;
+        public float MoveTimer;
     }
 }
