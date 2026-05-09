@@ -57,6 +57,10 @@ namespace ConquestGame
 
             var em = world.EntityManager;
 
+            // === 自动配置主摄像机 ===
+            // 地图在 XZ 平面（Y=0），相机从上方俯视
+            SetupCamera();
+
             // === 查询所有 HexCell 实体 ===
             var cellQuery = em.CreateEntityQuery(
                 ComponentType.ReadOnly<HexCellData>(),
@@ -73,13 +77,12 @@ namespace ConquestGame
             }
 
             // --- 确定可用的 Shader ---
-            // 按优先级尝试多个 Shader 路径，确保在不同 Unity/URP 版本下都能渲染
             string shaderName = null;
             foreach (var name in new[] {
-                "Universal Render Pipeline/Unlit",  // URP 标准 Unlit
-                "Unlit/Color",                      // 内置管线 Unlit
-                "Sprites/Default",                  // Sprite 默认（始终可用）
-                "Custom/VertexColorUnlit"           // 我们自建的顶点色 Shader
+                "Universal Render Pipeline/Unlit",
+                "Unlit/Color",
+                "Sprites/Default",
+                "Custom/VertexColorUnlit"
             })
             {
                 if (Shader.Find(name) != null)
@@ -88,7 +91,7 @@ namespace ConquestGame
                     break;
                 }
             }
-            Debug.Log($"[HexGrid] 使用 Shader: {shaderName ?? "NULL — 渲染将失败！"}");
+            Debug.Log($"[HexGrid] 使用 Shader: {shaderName ?? "NULL"}");
 
             // --- 为每个 HexCell 创建 GameObject ---
             for (int i = 0; i < cells.Length; i++)
@@ -201,6 +204,30 @@ namespace ConquestGame
                 mat.SetColor("_Color", color);
                 mr.material = mat;
             }
+        }
+
+        /// <summary>
+        /// 自动把主摄像机设置为俯视 XZ 平面的正交模式
+        /// 地图中心约在原点，范围约 ±9（X）× ±8（Z）
+        /// </summary>
+        private static void SetupCamera()
+        {
+            var cam = Camera.main;
+            if (cam == null)
+                return;
+
+            // 仅在第一次调用时配置，避免每帧重置
+            if (cam.orthographic && Mathf.Approximately(cam.orthographicSize, 11f))
+                return;
+
+            cam.orthographic = true;
+            cam.orthographicSize = 11f;           // 视野覆盖 ~22 单位
+            cam.transform.position = new Vector3(0f, 15f, 0f);
+            cam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            cam.backgroundColor = Color.black;    // 黑色背景，突出网格
+            cam.clearFlags = CameraClearFlags.SolidColor;
+
+            Debug.Log("[HexGrid] 已自动配置摄像机：正交俯视，Size=11，黑背景");
         }
     }
 }
