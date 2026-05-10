@@ -1,16 +1,17 @@
 using UnityEngine;
+using UnityEngine.AI;
 using System.Collections.Generic;
 
 public enum BattalionOwner { Player, Enemy }
 
-public enum BattalionState { Idle, Moving, Gathering, Attacking }
+public enum BattalionState { Idle, HopMoving, Gathering, Attacking }
 
 public class Battalion : MonoBehaviour
 {
     [Header("Config")]
     public BattalionOwner owner = BattalionOwner.Player;
-    public float moveSpeed = 3f;
-    public float attackSpeed = 12f;
+    public float hopDuration = 0.18f;
+    public float hopHeight = 0.3f;
     public float attackCooldown = 1.5f;
     public float attackRange = 1.5f;
     public float gatherInterval = 2f;
@@ -21,17 +22,24 @@ public class Battalion : MonoBehaviour
 
     [Header("Runtime")]
     [SerializeField] private BattalionState state = BattalionState.Idle;
-    [SerializeField] private Vector3 targetPosition;
+    [SerializeField] private Vector3 targetCell;
     [SerializeField] private float gatherAccum;
     [SerializeField] private float attackCooldownRemaining;
 
     private List<Transform> soldiers = new();
-    private List<Rigidbody> soldierRBs = new();
     private Vector3[] formationOffsets;
-    private Vector3 attackOrigin;
-    private Transform attackEnemy;
+
+    // Hop
+    private List<Vector3> pathCells = new();
+    private int pathIndex;
+    private Vector3 hopFrom, hopTo;
+    private float hopT, hopTotalTime;
+
+    // Attack
+    private Vector3 attackOrigin, attackTarget;
     private bool attackForward;
     private float attackT;
+
     private GameObject selectionRing;
 
     // ===== Lifecycle =====
@@ -39,8 +47,7 @@ public class Battalion : MonoBehaviour
     void Start()
     {
         bool usingDefault = soldierPrefab == null;
-        if (usingDefault)
-            soldierPrefab = CreateDefaultSoldier();
+        if (usingDefault) soldierPrefab = CreateDefaultSoldier();
 
         gameObject.tag = owner == BattalionOwner.Player ? "PlayerUnit" : "EnemyUnit";
         SpawnSoldiers();
@@ -51,7 +58,6 @@ public class Battalion : MonoBehaviour
             soldierPrefab = null;
         }
 
-        // Add a small trigger for enemy detection
         var col = gameObject.AddComponent<SphereCollider>();
         col.isTrigger = true;
         col.radius = 0.3f;
@@ -65,7 +71,7 @@ public class Battalion : MonoBehaviour
         go.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
         var rb = go.AddComponent<Rigidbody>();
         rb.useGravity = false;
-        rb.linearDamping = 3f;
+        rb.isKinematic = true;
         rb.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
         go.name = "DefaultSoldier";
         return go;
@@ -88,19 +94,14 @@ public class Battalion : MonoBehaviour
             go.name = $"Soldier_{i}";
             go.transform.localPosition = formationOffsets[i];
             go.transform.localRotation = Quaternion.identity;
-
             go.tag = gameObject.tag;
             go.layer = gameObject.layer;
-
             soldiers.Add(go.transform);
-            var rb = go.GetComponent<Rigidbody>();
-            soldierRBs.Add(rb);
         }
 
-        // Prevent soldiers within same battalion from colliding with each other
-        for (int i = 0; i < soldierRBs.Count; i++)
+        for (int i = 0; i < soldiers.Count; i++)
         {
-            for (int j = i + 1; j < soldierRBs.Count; j++)
+            for (int j = i + 1; j < soldiers.Count; j++)
             {
                 var ca = soldiers[i].GetComponent<Collider>();
                 var cb = soldiers[j].GetComponent<Collider>();
@@ -138,8 +139,8 @@ public class Battalion : MonoBehaviour
             case BattalionState.Idle:
                 CheckAutoAttack();
                 break;
-            case BattalionState.Moving:
-                MoveTick();
+            case BattalionState.HopMoving:
+                HopTick();
                 CheckAutoAttack();
                 break;
             case BattalionState.Gathering:
@@ -154,66 +155,107 @@ public class Battalion : MonoBehaviour
 
     // ===== Commands =====
 
-    public void CommandMove(Vector3 worldPos)
+    public void CommandMove(Vector3 cellCenter)
     {
-        targetPosition = new Vector3(worldPos.x, 0, worldPos.z);
-        state = BattalionState.Moving;
+        targetCell = new Vector3(cellCenter.x, 0, cellCenter.z);
+        BuildPath(transform.position, targetCell);
+        if (pathCells.Count > 0)
+        {
+            pathIndex = 0;
+            StartHop(pathCells[0]);
+        }
     }
 
     public void SetSelected(bool sel)
     {
-        if (selectionRing != null)
-            selectionRing.SetActive(sel);
+        if (selectionRing != null) selectionRing.SetActive(sel);
     }
 
-    // ===== Movement =====
+    static Vector3 WorldToGrid(Vector3 pos) => new(Mathf.Round(pos.x), 0, Mathf.Round(pos.z));
 
-    void MoveTick()
+    // ===== Pathfinding =====
+
+    void BuildPath(Vector3 from, Vector3 to)
     {
-        Vector3 toTarget = targetPosition - transform.position;
-        toTarget.y = 0;
-        float dist = toTarget.magnitude;
-
-        if (dist < 0.15f)
+        pathCells.Clear();
+        var navPath = new NavMeshPath();
+        if (NavMesh.CalculatePath(from, to, NavMesh.AllAreas, navPath) &&
+            navPath.status == NavMeshPathStatus.PathComplete)
         {
-            // Check for gold mine at arrival
-            if (CheckGoldMine(targetPosition))
+            Vector3 lastCell = WorldToGrid(from);
+            pathCells.Add(lastCell);
+            for (int i = 0; i < navPath.corners.Length; i++)
             {
-                state = BattalionState.Gathering;
-                gatherAccum = 0;
+                Vector3 cell = WorldToGrid(navPath.corners[i]);
+                if (cell != lastCell && IsValidCell(cell))
+                {
+                    pathCells.Add(cell);
+                    lastCell = cell;
+                }
             }
+            Vector3 final = WorldToGrid(to);
+            if (final != lastCell && IsValidCell(final))
+                pathCells.Add(final);
+        }
+        else
+        {
+            // Fallback: straight line
+            pathCells.Add(WorldToGrid(from));
+            Vector3 t = WorldToGrid(to);
+            if (t != pathCells[0]) pathCells.Add(t);
+        }
+    }
+
+    static bool IsValidCell(Vector3 cell) =>
+        cell.x >= 0 && cell.x <= 29 && cell.z >= 0 && cell.z <= 19;
+
+    // ===== Hop Movement =====
+
+    void StartHop(Vector3 toCell)
+    {
+        state = BattalionState.HopMoving;
+        hopFrom = transform.position;
+        hopFrom.y = 0;
+        hopTo = toCell;
+        hopT = 0;
+        float dist = Vector3.Distance(hopFrom, hopTo);
+        hopTotalTime = hopDuration * Mathf.Max(1f, dist);
+    }
+
+    void HopTick()
+    {
+        hopT += Time.deltaTime / hopTotalTime;
+
+        if (hopT >= 1f)
+        {
+            transform.position = hopTo;
+            pathIndex++;
+            if (pathIndex < pathCells.Count)
+                StartHop(pathCells[pathIndex]);
+            else if (CheckGoldMine(transform.position))
+            { state = BattalionState.Gathering; gatherAccum = 0; }
             else
-            {
                 state = BattalionState.Idle;
-            }
-            StopSoldiers();
-            return;
+        }
+        else
+        {
+            float xz = EaseInOut(hopT);
+            Vector3 pos = Vector3.Lerp(hopFrom, hopTo, xz);
+            pos.y = hopHeight * Mathf.Sin(hopT * Mathf.PI);
+            transform.position = pos;
         }
 
-        Vector3 dir = toTarget / dist;
-        float step = moveSpeed * Time.deltaTime;
-        if (step > dist) step = dist;
-        transform.position += dir * step;
-
-        // Move soldiers toward formation positions
+        // Soldiers follow with slight lag
         for (int i = 0; i < soldiers.Count; i++)
         {
-            Vector3 target = transform.TransformPoint(formationOffsets[i]);
-            Vector3 delta = target - soldiers[i].position;
-            delta.y = 0;
-            float d = delta.magnitude;
-            if (d > 0.05f)
-                soldierRBs[i].linearVelocity = delta / d * moveSpeed * 1.3f;
-            else
-                soldierRBs[i].linearVelocity = Vector3.zero;
+            Vector3 tw = transform.TransformPoint(formationOffsets[i]);
+            soldiers[i].position = Vector3.Lerp(soldiers[i].position, tw, 15f * Time.deltaTime);
+            soldiers[i].position = new Vector3(soldiers[i].position.x, transform.position.y, soldiers[i].position.z);
         }
     }
 
-    void StopSoldiers()
-    {
-        for (int i = 0; i < soldierRBs.Count; i++)
-            soldierRBs[i].linearVelocity = Vector3.zero;
-    }
+    static float EaseInOut(float t) =>
+        t < 0.5f ? 2f * t * t : 1f - Mathf.Pow(-2f * t + 2f, 2f) / 2f;
 
     // ===== Gathering =====
 
@@ -240,24 +282,22 @@ public class Battalion : MonoBehaviour
     void CheckAutoAttack()
     {
         if (attackCooldownRemaining > 0) return;
-
         var hits = Physics.OverlapSphere(transform.position, attackRange);
         foreach (var h in hits)
         {
             var other = h.GetComponentInParent<Battalion>();
             if (other != null && other != this && other.owner != owner)
-            {
-                StartAttack(other.transform);
-                return;
-            }
+            { StartAttack(other.transform.position); return; }
         }
     }
 
-    void StartAttack(Transform enemy)
+    void StartAttack(Vector3 enemyPos)
     {
         state = BattalionState.Attacking;
         attackOrigin = transform.position;
-        attackEnemy = enemy;
+        attackOrigin.y = 0;
+        attackTarget = enemyPos;
+        attackTarget.y = 0;
         attackForward = true;
         attackT = 0;
         attackCooldownRemaining = attackCooldown;
@@ -265,41 +305,38 @@ public class Battalion : MonoBehaviour
 
     void AttackTick()
     {
-        float dashDur = Vector3.Distance(attackOrigin, attackEnemy.position) / attackSpeed;
-        if (dashDur < 0.1f) dashDur = 0.1f;
+        float dashDur = 0.15f;
+        float dist = Vector3.Distance(attackOrigin, attackTarget);
+        if (dist > 0.01f) dashDur = dist / 10f;
 
         if (attackForward)
         {
             attackT += Time.deltaTime / dashDur;
-            float t = EaseOut(attackT);
-            Vector3 target = attackEnemy != null ? attackEnemy.position : attackOrigin;
-            transform.position = Vector3.Lerp(attackOrigin, target, Mathf.Clamp01(t));
-
-            if (attackT >= 1f)
-            {
-                Debug.Log($"[{name}] 撞击敌军!");
-                attackForward = false;
-                attackT = 0;
-            }
+            float t = Mathf.Clamp01(attackT);
+            Vector3 pos = Vector3.Lerp(attackOrigin, attackTarget, EaseOut(t));
+            pos.y = hopHeight * 0.7f * Mathf.Sin(t * Mathf.PI);
+            transform.position = pos;
+            if (attackT >= 1f) { Debug.Log($"[{name}] 撞击敌军!"); attackForward = false; attackT = 0; }
         }
         else
         {
             attackT += Time.deltaTime / dashDur;
-            float t = EaseOut(attackT);
-            transform.position = Vector3.Lerp(attackEnemy != null ? attackEnemy.position : attackOrigin,
-                                               attackOrigin, Mathf.Clamp01(t));
+            float t = Mathf.Clamp01(attackT);
+            Vector3 pos = Vector3.Lerp(attackTarget, attackOrigin, EaseOut(t));
+            pos.y = hopHeight * 0.7f * Mathf.Sin(t * Mathf.PI);
+            transform.position = pos;
+            if (attackT >= 1f) { transform.position = attackOrigin; state = BattalionState.Idle; }
+        }
 
-            if (attackT >= 1f)
-            {
-                transform.position = attackOrigin;
-                state = BattalionState.Idle;
-            }
+        for (int i = 0; i < soldiers.Count; i++)
+        {
+            Vector3 tw = transform.TransformPoint(formationOffsets[i]);
+            soldiers[i].position = Vector3.Lerp(soldiers[i].position, tw, 20f * Time.deltaTime);
+            soldiers[i].position = new Vector3(soldiers[i].position.x, transform.position.y, soldiers[i].position.z);
         }
     }
 
-    float EaseOut(float t) => 1f - (1f - t) * (1f - t);
-
-    // ===== Gizmo =====
+    static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
 
     void OnDrawGizmosSelected()
     {

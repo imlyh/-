@@ -60,7 +60,13 @@ public class BattalionCommander : MonoBehaviour
         if (plane.Raycast(ray, out float dist))
         {
             Vector3 hitPoint = ray.GetPoint(dist);
-            selectedBattalion.CommandMove(hitPoint);
+            // Snap to nearest grid cell center
+            Vector3 cellCenter = new Vector3(
+                Mathf.Clamp(Mathf.Round(hitPoint.x), 0, 29),
+                0,
+                Mathf.Clamp(Mathf.Round(hitPoint.z), 0, 19)
+            );
+            selectedBattalion.CommandMove(cellCenter);
         }
     }
 }
