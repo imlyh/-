@@ -85,10 +85,6 @@ public partial class BattalionInitializationSystem : SystemBase
             go.layer = layer;
             go.tag = owner==BattalionOwner.Player?"PlayerUnit":"EnemyUnit";
             go.GetComponent<MeshRenderer>().material = mat;
-            var obs = go.AddComponent<NavMeshObstacle>();
-            obs.shape = NavMeshObstacleShape.Box;
-            obs.size = new Vector3(0.35f, 1f, 0.35f);
-            obs.carving = true;
             var agent = go.AddComponent<NavMeshAgent>();
             agent.radius = cfg.agentRadius;
             agent.height = cfg.agentHeight;

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 32d91aa6f632caf4a8b94b3215b395e5, type: 3}
   m_Name: BattalionConfig
   m_EditorClassIdentifier: ConquestGame::BattalionConfig
-  attackRange: 1.5
+  attackRange: 0.5
   attackCooldown: 1.5
   dashSpeed: 10
   dashHeight: 0.25
