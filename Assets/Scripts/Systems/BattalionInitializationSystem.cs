@@ -63,7 +63,6 @@ public partial class BattalionInitializationSystem : SystemBase
             go.layer = layer;
             go.tag = owner == BattalionOwner.Player ? "PlayerUnit" : "EnemyUnit";
             go.GetComponent<MeshRenderer>().material = mat;
-            go.hideFlags = HideFlags.HideInHierarchy;
             GOMap[go.GetInstanceID()] = go;
             ecb.AddComponent(se, new EntityLink{goInstanceID=go.GetInstanceID()});
         }
