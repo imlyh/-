@@ -274,6 +274,12 @@ public class Battalion : MonoBehaviour
             gatherAccum -= gatherInterval;
             Debug.Log($"[{name}] 采集资源 +10 金");
         }
+        // Keep soldiers in formation near the mine
+        for (int i = 0; i < soldiers.Count; i++)
+        {
+            Vector3 tw = transform.TransformPoint(formationOffsets[i]);
+            soldiers[i].position = Vector3.Lerp(soldiers[i].position, tw, 15f * Time.deltaTime);
+        }
     }
 
     void OnDestroy()
