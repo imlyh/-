@@ -46,9 +46,10 @@ namespace Opsive.BehaviorDesigner.Runtime.Tasks.Actions
                     .WithAll<EnemyWaitFlag, EvaluateFlag>())
             {
                 var tasks = taskBuf;
-                for (int i = 0; i < compBuf.Length; ++i)
+                var comps = compBuf.AsNativeArray();
+                for (int i = 0; i < comps.Length; ++i)
                 {
-                    var comp = compBuf[i];
+                    var comp = comps[i];
                     var task = tasks[comp.Index];
 
                     if (task.Status == TaskStatus.Queued)
@@ -56,7 +57,7 @@ namespace Opsive.BehaviorDesigner.Runtime.Tasks.Actions
                         comp.StartTime = time;
                         task.Status = TaskStatus.Running;
                         tasks[comp.Index] = task;
-                        compBuf[i] = comp;
+                        comps[i] = comp;
                     }
                     else if (task.Status == TaskStatus.Running)
                     {
