@@ -22,7 +22,7 @@ public partial class BattalionInputSystem : SystemBase
         if (mouse.leftButton.wasPressedThisFrame)
         {
             var ray = cam.ScreenPointToRay(mouse.position.ReadValue());
-            if (Physics.Raycast(ray, out var hit, 500f))
+            if (Physics.SphereCast(ray, 0.4f, out var hit, 500f))
             {
                 var e = ResolveEntity(hit.collider.gameObject);
                 Debug.Log($"[INPUT] Clicked '{hit.collider.gameObject.name}', entity={e}, hasParent={e!=Entity.Null && EntityManager.HasComponent<Parent>(e)}");
