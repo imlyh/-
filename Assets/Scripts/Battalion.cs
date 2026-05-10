@@ -4,16 +4,15 @@ using System.Collections.Generic;
 
 public enum BattalionOwner { Player, Enemy }
 
-public enum BattalionState { Idle, HopMoving, Gathering, Attacking }
+public enum BattalionState { Idle, Moving, Gathering }
 
 public class Battalion : MonoBehaviour
 {
     [Header("Config")]
     public BattalionOwner owner = BattalionOwner.Player;
-    public float hopDuration = 0.18f;
-    public float hopHeight = 0.3f;
-    public float attackCooldown = 1.5f;
-    public float attackRange = 1.5f;
+    public float moveSpeed = 4f;
+    public float bobHeight = 0.2f;
+    public float bobFrequency = 8f;
     public float gatherInterval = 2f;
     public float formationSpacing = 0.55f;
 
@@ -24,21 +23,14 @@ public class Battalion : MonoBehaviour
     [SerializeField] private BattalionState state = BattalionState.Idle;
     [SerializeField] private Vector3 targetCell;
     [SerializeField] private float gatherAccum;
-    [SerializeField] private float attackCooldownRemaining;
 
     private List<Transform> soldiers = new();
     private Vector3[] formationOffsets;
 
-    // Hop
-    private List<Vector3> pathCells = new();
+    // Path movement
+    private List<Vector3> pathPoints = new();
     private int pathIndex;
-    private Vector3 hopFrom, hopTo;
-    private float hopT, hopTotalTime;
-
-    // Attack
-    private Vector3 attackOrigin, attackTarget;
-    private bool attackForward;
-    private float attackT;
+    private float bobPhase;
 
     private GameObject selectionRing;
 
@@ -63,6 +55,7 @@ public class Battalion : MonoBehaviour
         col.radius = 0.3f;
 
         CreateSelectionRing();
+        bobPhase = Random.Range(0f, 100f);
     }
 
     GameObject CreateDefaultSoldier()
@@ -73,6 +66,7 @@ public class Battalion : MonoBehaviour
         rb.useGravity = false;
         rb.isKinematic = true;
         rb.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
+        go.AddComponent<Soldier>();
         go.name = "DefaultSoldier";
         return go;
     }
@@ -131,24 +125,13 @@ public class Battalion : MonoBehaviour
 
     void Update()
     {
-        if (attackCooldownRemaining > 0)
-            attackCooldownRemaining -= Time.deltaTime;
-
         switch (state)
         {
-            case BattalionState.Idle:
-                CheckAutoAttack();
-                break;
-            case BattalionState.HopMoving:
-                HopTick();
-                CheckAutoAttack();
+            case BattalionState.Moving:
+                MoveTick();
                 break;
             case BattalionState.Gathering:
                 GatherTick();
-                CheckAutoAttack();
-                break;
-            case BattalionState.Attacking:
-                AttackTick();
                 break;
         }
     }
@@ -159,10 +142,10 @@ public class Battalion : MonoBehaviour
     {
         targetCell = new Vector3(cellCenter.x, 0, cellCenter.z);
         BuildPath(transform.position, targetCell);
-        if (pathCells.Count > 0)
+        if (pathPoints.Count > 0)
         {
             pathIndex = 0;
-            StartHop(pathCells[0]);
+            state = BattalionState.Moving;
         }
     }
 
@@ -171,91 +154,72 @@ public class Battalion : MonoBehaviour
         if (selectionRing != null) selectionRing.SetActive(sel);
     }
 
-    static Vector3 WorldToGrid(Vector3 pos) => new(Mathf.Round(pos.x), 0, Mathf.Round(pos.z));
-
     // ===== Pathfinding =====
 
     void BuildPath(Vector3 from, Vector3 to)
     {
-        pathCells.Clear();
+        pathPoints.Clear();
         var navPath = new NavMeshPath();
         if (NavMesh.CalculatePath(from, to, NavMesh.AllAreas, navPath) &&
             navPath.status == NavMeshPathStatus.PathComplete)
         {
-            Vector3 lastCell = WorldToGrid(from);
-            pathCells.Add(lastCell);
             for (int i = 0; i < navPath.corners.Length; i++)
             {
-                Vector3 cell = WorldToGrid(navPath.corners[i]);
-                if (cell != lastCell && IsValidCell(cell))
-                {
-                    pathCells.Add(cell);
-                    lastCell = cell;
-                }
+                Vector3 pt = navPath.corners[i];
+                pt.y = 0;
+                pathPoints.Add(pt);
             }
-            Vector3 final = WorldToGrid(to);
-            if (final != lastCell && IsValidCell(final))
-                pathCells.Add(final);
         }
-        else
-        {
-            // Fallback: straight line
-            pathCells.Add(WorldToGrid(from));
-            Vector3 t = WorldToGrid(to);
-            if (t != pathCells[0]) pathCells.Add(t);
-        }
+        // Always add exact target
+        Vector3 target = to;
+        target.y = 0;
+        if (pathPoints.Count == 0 || pathPoints[pathPoints.Count - 1] != target)
+            pathPoints.Add(target);
     }
 
-    static bool IsValidCell(Vector3 cell) =>
-        cell.x >= 0 && cell.x <= 29 && cell.z >= 0 && cell.z <= 19;
+    // ===== Continuous Movement with Bob =====
 
-    // ===== Hop Movement =====
-
-    void StartHop(Vector3 toCell)
+    void MoveTick()
     {
-        state = BattalionState.HopMoving;
-        hopFrom = transform.position;
-        hopFrom.y = 0;
-        hopTo = toCell;
-        hopT = 0;
-        float dist = Vector3.Distance(hopFrom, hopTo);
-        hopTotalTime = hopDuration * Mathf.Max(1f, dist);
-    }
-
-    void HopTick()
-    {
-        hopT += Time.deltaTime / hopTotalTime;
-
-        if (hopT >= 1f)
+        if (pathIndex >= pathPoints.Count)
         {
-            transform.position = hopTo;
-            pathIndex++;
-            if (pathIndex < pathCells.Count)
-                StartHop(pathCells[pathIndex]);
-            else if (CheckGoldMine(transform.position))
+            if (CheckGoldMine(transform.position))
             { state = BattalionState.Gathering; gatherAccum = 0; }
             else
                 state = BattalionState.Idle;
+            return;
+        }
+
+        Vector3 target = pathPoints[pathIndex];
+        Vector3 flatPos = transform.position;
+        flatPos.y = 0;
+
+        Vector3 dir = target - flatPos;
+        float dist = dir.magnitude;
+
+        float step = moveSpeed * Time.deltaTime;
+        if (step >= dist)
+        {
+            flatPos = target;
+            pathIndex++;
+            bobPhase += dist * bobFrequency;
         }
         else
         {
-            float xz = EaseInOut(hopT);
-            Vector3 pos = Vector3.Lerp(hopFrom, hopTo, xz);
-            pos.y = hopHeight * Mathf.Sin(hopT * Mathf.PI);
-            transform.position = pos;
+            flatPos += dir / dist * step;
+            bobPhase += step * bobFrequency;
         }
 
-        // Soldiers follow with slight lag
+        float yBob = Mathf.Abs(Mathf.Sin(bobPhase)) * bobHeight;
+        transform.position = new Vector3(flatPos.x, yBob, flatPos.z);
+
+        // Soldiers track formation positions
         for (int i = 0; i < soldiers.Count; i++)
         {
             Vector3 tw = transform.TransformPoint(formationOffsets[i]);
             soldiers[i].position = Vector3.Lerp(soldiers[i].position, tw, 15f * Time.deltaTime);
-            soldiers[i].position = new Vector3(soldiers[i].position.x, transform.position.y, soldiers[i].position.z);
         }
     }
-
-    static float EaseInOut(float t) =>
-        t < 0.5f ? 2f * t * t : 1f - Mathf.Pow(-2f * t + 2f, 2f) / 2f;
 
     // ===== Gathering =====
 
@@ -275,73 +239,6 @@ public class Battalion : MonoBehaviour
             gatherAccum -= gatherInterval;
             Debug.Log($"[{name}] 采集资源 +10 金");
         }
-    }
-
-    // ===== Auto Attack =====
-
-    void CheckAutoAttack()
-    {
-        if (attackCooldownRemaining > 0) return;
-        var hits = Physics.OverlapSphere(transform.position, attackRange);
-        foreach (var h in hits)
-        {
-            var other = h.GetComponentInParent<Battalion>();
-            if (other != null && other != this && other.owner != owner)
-            { StartAttack(other.transform.position); return; }
-        }
-    }
-
-    void StartAttack(Vector3 enemyPos)
-    {
-        state = BattalionState.Attacking;
-        attackOrigin = transform.position;
-        attackOrigin.y = 0;
-        attackTarget = enemyPos;
-        attackTarget.y = 0;
-        attackForward = true;
-        attackT = 0;
-        attackCooldownRemaining = attackCooldown;
-    }
-
-    void AttackTick()
-    {
-        float dashDur = 0.15f;
-        float dist = Vector3.Distance(attackOrigin, attackTarget);
-        if (dist > 0.01f) dashDur = dist / 10f;
-
-        if (attackForward)
-        {
-            attackT += Time.deltaTime / dashDur;
-            float t = Mathf.Clamp01(attackT);
-            Vector3 pos = Vector3.Lerp(attackOrigin, attackTarget, EaseOut(t));
-            pos.y = hopHeight * 0.7f * Mathf.Sin(t * Mathf.PI);
-            transform.position = pos;
-            if (attackT >= 1f) { Debug.Log($"[{name}] 撞击敌军!"); attackForward = false; attackT = 0; }
-        }
-        else
-        {
-            attackT += Time.deltaTime / dashDur;
-            float t = Mathf.Clamp01(attackT);
-            Vector3 pos = Vector3.Lerp(attackTarget, attackOrigin, EaseOut(t));
-            pos.y = hopHeight * 0.7f * Mathf.Sin(t * Mathf.PI);
-            transform.position = pos;
-            if (attackT >= 1f) { transform.position = attackOrigin; state = BattalionState.Idle; }
-        }
-
-        for (int i = 0; i < soldiers.Count; i++)
-        {
-            Vector3 tw = transform.TransformPoint(formationOffsets[i]);
-            soldiers[i].position = Vector3.Lerp(soldiers[i].position, tw, 20f * Time.deltaTime);
-            soldiers[i].position = new Vector3(soldiers[i].position.x, transform.position.y, soldiers[i].position.z);
-        }
-    }
-
-    static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
-
-    void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, attackRange);
     }
 
     void OnDestroy()
