@@ -31,6 +31,7 @@ public class Battalion : MonoBehaviour
     private List<Vector3> pathPoints = new();
     private int pathIndex;
     private float bobPhase;
+    private bool stopForEnemy;
 
     private GameObject selectionRing;
 
@@ -141,12 +142,25 @@ public class Battalion : MonoBehaviour
     public void CommandMove(Vector3 cellCenter)
     {
         targetCell = new Vector3(cellCenter.x, 0, cellCenter.z);
+        stopForEnemy = CheckEnemyAt(targetCell);
         BuildPath(transform.position, targetCell);
         if (pathPoints.Count > 0)
         {
             pathIndex = 0;
             state = BattalionState.Moving;
         }
+    }
+
+    bool CheckEnemyAt(Vector3 pos)
+    {
+        var hits = Physics.OverlapSphere(pos, 0.7f);
+        foreach (var h in hits)
+        {
+            var other = h.GetComponentInParent<Battalion>();
+            if (other != null && other != this && other.owner != owner)
+                return true;
+        }
+        return false;
     }
 
     public void SetSelected(bool sel)
@@ -190,8 +204,8 @@ public class Battalion : MonoBehaviour
             return;
         }
 
-        // Stop if too close to another battalion (no overlap, attack range trigger)
-        if (CheckNearbyBattalion())
+        // Stop near enemy only if command target was an enemy
+        if (stopForEnemy && CheckNearbyBattalion())
         {
             state = BattalionState.Idle;
             return;
