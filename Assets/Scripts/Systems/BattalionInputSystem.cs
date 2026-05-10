@@ -15,7 +15,7 @@ public partial class BattalionInputSystem : SystemBase
     {
         var mouse = Mouse.current;
         if (mouse == null) return;
-        var cmd = SystemAPI.GetSingletonRW<PlayerCommandData>();
+        if (!SystemAPI.TryGetSingletonRW<PlayerCommandData>(out var cmd)) return;
 
         if (mouse.leftButton.wasPressedThisFrame)
         {
@@ -33,25 +33,20 @@ public partial class BattalionInputSystem : SystemBase
             var ray = cam.ScreenPointToRay(mouse.position.ReadValue());
             var plane = new Plane(Vector3.up, Vector3.zero);
             if (!plane.Raycast(ray, out float dist)) return;
-
             var pt = ray.GetPoint(dist);
-            var cell = new float3(math.clamp(math.round(pt.x), 0, 29), 0, math.clamp(math.round(pt.z), 0, 19));
+            var cell = new float3(math.clamp(math.round(pt.x),0,29), 0, math.clamp(math.round(pt.z),0,19));
             var type = CommandType.Move;
-            var hits = Physics.OverlapSphere(new Vector3(cell.x, 0, cell.z), 0.7f);
-            bool isMine = false, isEnemy = false;
-
+            var hits = Physics.OverlapSphere(new Vector3(cell.x,0,cell.z), 0.7f);
+            bool isMine=false, isEnemy=false;
             var batData = EntityManager.GetComponentData<BattalionData>(cmd.ValueRW.selectedBattalion);
             foreach (var h in hits)
             {
-                if (h.name.StartsWith("GoldMine")) isMine = true;
-                else if (CheckEnemyGO(h.gameObject, batData.owner)) isEnemy = true;
+                if (h.name.StartsWith("GoldMine")) isMine=true;
+                else if (CheckEnemyGO(h.gameObject, batData.owner)) isEnemy=true;
             }
-            if (isMine) type = CommandType.Mine;
-            else if (isEnemy) type = CommandType.Attack;
-
-            cmd.ValueRW.targetCell = cell;
-            cmd.ValueRW.commandType = type;
-            cmd.ValueRW.pending = true;
+            if (isMine) type=CommandType.Mine;
+            else if (isEnemy) type=CommandType.Attack;
+            cmd.ValueRW.targetCell=cell; cmd.ValueRW.commandType=type; cmd.ValueRW.pending=true;
         }
     }
 
