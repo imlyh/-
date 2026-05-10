@@ -41,6 +41,7 @@ public partial class BattalionInitializationSystem : SystemBase
             bobPhase=UnityEngine.Random.Range(0f,100f)
         });
         ecb.AddBuffer<BattalionPathPoint>(e);
+        var children = ecb.AddBuffer<Child>(e);
 
         float s = 0.55f;
         var off = new float3[]{ new(-s/2,0,-s/2),new(s/2,0,-s/2),new(-s/2,0,s/2),new(s/2,0,s/2) };
@@ -53,6 +54,8 @@ public partial class BattalionInitializationSystem : SystemBase
             ecb.AddComponent(se, new SoldierData{
                 attackRange=1.5f,attackCooldown=1.5f,dashSpeed=10f,dashHeight=0.25f,formationOffset=off[i]
             });
+            children.Add(new Child{Value=se});
+
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = $"{name}_S{i}_GO";
             go.transform.localScale = Vector3.one * 0.35f;
