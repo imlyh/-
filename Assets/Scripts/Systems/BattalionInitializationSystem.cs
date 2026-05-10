@@ -6,6 +6,7 @@ using UnityEngine;
 [UpdateInGroup(typeof(InitializationSystemGroup))]
 public partial class BattalionInitializationSystem : SystemBase
 {
+    public static readonly System.Collections.Generic.Dictionary<int, GameObject> GOMap = new();
     protected override void OnCreate()
     {
         EntityManager.CreateSingleton<PlayerCommandData>();
@@ -62,7 +63,8 @@ public partial class BattalionInitializationSystem : SystemBase
             go.layer = layer;
             go.tag = owner == BattalionOwner.Player ? "PlayerUnit" : "EnemyUnit";
             go.GetComponent<MeshRenderer>().material = mat;
-            go.hideFlags = HideFlags.HideAndDontSave;
+            go.hideFlags = HideFlags.HideInHierarchy;
+            GOMap[go.GetInstanceID()] = go;
             ecb.AddComponent(se, new EntityLink{goInstanceID=go.GetInstanceID()});
         }
         ecb.Playback(EntityManager);
