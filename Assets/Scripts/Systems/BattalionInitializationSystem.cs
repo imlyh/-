@@ -18,12 +18,11 @@ public partial class BattalionInitializationSystem : SystemBase
     {
         Enabled = false;
         var temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        var cubeMesh = temp.GetComponent<MeshFilter>().sharedMesh;
         var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
         mat.color = Color.white;
         Object.DestroyImmediate(temp);
-
         int layer = LayerMask.NameToLayer("Unit");
+
         CreateBattalion(new float3(4,0,10), BattalionOwner.Player, "PBN_A", mat, layer);
         CreateBattalion(new float3(4,0,7),  BattalionOwner.Player, "PBN_B", mat, layer);
         CreateBattalion(new float3(25,0,10), BattalionOwner.Enemy, "EBN_A", mat, layer);
@@ -44,21 +43,21 @@ public partial class BattalionInitializationSystem : SystemBase
             bobPhase=UnityEngine.Random.Range(0f,100f)
         });
         em.AddBuffer<BattalionPathPoint>(e);
-        var ch = em.AddBuffer<Child>(e);
+        em.AddBuffer<Child>(e);
 
         float s = 0.55f;
         var off = new float3[]{ new(-s/2,0,-s/2),new(s/2,0,-s/2),new(-s/2,0,s/2),new(s/2,0,s/2) };
+        var childEnts = new Entity[4];
         for (int i = 0; i < 4; i++)
         {
             var se = em.CreateEntity();
+            childEnts[i] = se;
             em.SetName(se, $"{name}_S{i}");
             em.AddComponentData(se, LocalTransform.FromPosition(off[i]));
             em.AddComponentData(se, new Parent{Value=e});
             em.AddComponentData(se, new SoldierData{
                 attackRange=1.5f,attackCooldown=1.5f,dashSpeed=10f,dashHeight=0.25f,formationOffset=off[i]
             });
-            ch.Add(new Child{Value=se});
-
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = $"{name}_S{i}_GO";
             go.transform.localScale = Vector3.one * 0.35f;
@@ -69,5 +68,7 @@ public partial class BattalionInitializationSystem : SystemBase
             GOMap[go.GetInstanceID()] = go;
             em.AddComponentData(se, new EntityLink{goInstanceID=go.GetInstanceID()});
         }
+        var ch = em.GetBuffer<Child>(e);
+        foreach (var ce in childEnts) ch.Add(new Child{Value=ce});
     }
 }
