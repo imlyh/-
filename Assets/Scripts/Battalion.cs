@@ -3,17 +3,17 @@ using UnityEngine.AI;
 using System.Collections.Generic;
 
 public enum BattalionOwner { Player, Enemy }
-
-public enum BattalionState { Idle, Moving, Gathering }
+public enum BattalionState { Idle, Moving, Mining, Attacking }
+public enum CommandType { Move, Mine, Attack }
 
 public class Battalion : MonoBehaviour
 {
     [Header("Config")]
     public BattalionOwner owner = BattalionOwner.Player;
     public float moveSpeed = 4f;
+    public float detectionRange = 1.3f;
     public float bobHeight = 0.2f;
     public float bobFrequency = 8f;
-    public float gatherInterval = 2f;
     public float formationSpacing = 0.55f;
 
     [Header("Prefab")]
@@ -21,18 +21,16 @@ public class Battalion : MonoBehaviour
 
     [Header("Runtime")]
     [SerializeField] private BattalionState state = BattalionState.Idle;
+    [SerializeField] private CommandType currentCommand;
     [SerializeField] private Vector3 targetCell;
-    [SerializeField] private float gatherAccum;
+
+    public BattalionState CurrentState => state;
 
     private List<Transform> soldiers = new();
     private Vector3[] formationOffsets;
-
-    // Path movement
     private List<Vector3> pathPoints = new();
     private int pathIndex;
     private float bobPhase;
-    private bool stopForEnemy;
-
     private GameObject selectionRing;
 
     // ===== Lifecycle =====
@@ -95,7 +93,6 @@ public class Battalion : MonoBehaviour
         }
 
         for (int i = 0; i < soldiers.Count; i++)
-        {
             for (int j = i + 1; j < soldiers.Count; j++)
             {
                 var ca = soldiers[i].GetComponent<Collider>();
@@ -103,7 +100,6 @@ public class Battalion : MonoBehaviour
                 if (ca != null && cb != null)
                     Physics.IgnoreCollision(ca, cb);
             }
-        }
     }
 
     void CreateSelectionRing()
@@ -128,39 +124,24 @@ public class Battalion : MonoBehaviour
     {
         switch (state)
         {
-            case BattalionState.Moving:
-                MoveTick();
-                break;
-            case BattalionState.Gathering:
-                GatherTick();
-                break;
+            case BattalionState.Moving:  MoveTick(); break;
+            case BattalionState.Mining:  MiningTick(); break;
+            case BattalionState.Attacking: AttackTick(); break;
         }
     }
 
-    // ===== Commands =====
+    // ===== Command =====
 
-    public void CommandMove(Vector3 cellCenter)
+    public void Command(Vector3 cellCenter, CommandType type)
     {
         targetCell = new Vector3(cellCenter.x, 0, cellCenter.z);
-        stopForEnemy = CheckEnemyAt(targetCell);
+        currentCommand = type;
         BuildPath(transform.position, targetCell);
         if (pathPoints.Count > 0)
         {
             pathIndex = 0;
             state = BattalionState.Moving;
         }
-    }
-
-    bool CheckEnemyAt(Vector3 pos)
-    {
-        var hits = Physics.OverlapSphere(pos, 0.7f);
-        foreach (var h in hits)
-        {
-            var other = h.GetComponentInParent<Battalion>();
-            if (other != null && other != this && other.owner != owner)
-                return true;
-        }
-        return false;
     }
 
     public void SetSelected(bool sel)
@@ -184,41 +165,32 @@ public class Battalion : MonoBehaviour
                 pathPoints.Add(pt);
             }
         }
-        // Always add exact target
         Vector3 target = to;
         target.y = 0;
         if (pathPoints.Count == 0 || pathPoints[pathPoints.Count - 1] != target)
             pathPoints.Add(target);
     }
 
-    // ===== Continuous Movement with Bob =====
+    // ===== MoveTick =====
 
     void MoveTick()
     {
-        if (pathIndex >= pathPoints.Count)
-        {
-            if (CheckGoldMine(transform.position))
-            { state = BattalionState.Gathering; gatherAccum = 0; }
-            else
-                state = BattalionState.Idle;
-            return;
-        }
-
-        // Stop near enemy only if command target was an enemy
-        if (stopForEnemy && CheckNearbyBattalion())
-        {
-            state = BattalionState.Idle;
-            return;
-        }
-
-        Vector3 target = pathPoints[pathIndex];
         Vector3 flatPos = transform.position;
         flatPos.y = 0;
 
+        if (currentCommand == CommandType.Mine && IsMineInRange(flatPos))
+        { state = BattalionState.Mining; return; }
+        if (currentCommand == CommandType.Attack && IsEnemyInRange(flatPos))
+        { state = BattalionState.Attacking; return; }
+
+        if (pathIndex >= pathPoints.Count)
+        { state = BattalionState.Idle; return; }
+
+        Vector3 target = pathPoints[pathIndex];
         Vector3 dir = target - flatPos;
         float dist = dir.magnitude;
-
         float step = moveSpeed * Time.deltaTime;
+
         if (step >= dist)
         {
             flatPos = target;
@@ -233,8 +205,27 @@ public class Battalion : MonoBehaviour
 
         float yBob = Mathf.Abs(Mathf.Sin(bobPhase)) * bobHeight;
         transform.position = new Vector3(flatPos.x, yBob, flatPos.z);
+        MaintainFormation();
+    }
 
-        // Soldiers track formation positions
+    // ===== Mining / Attack ticks =====
+
+    void MiningTick()
+    {
+        if (!IsMineInRange(FlatPos()))
+        { BuildPath(transform.position, targetCell); pathIndex = 0; state = BattalionState.Moving; return; }
+        MaintainFormation();
+    }
+
+    void AttackTick()
+    {
+        if (!IsEnemyInRange(FlatPos()))
+        { BuildPath(transform.position, targetCell); pathIndex = 0; state = BattalionState.Moving; return; }
+        MaintainFormation();
+    }
+
+    void MaintainFormation()
+    {
         for (int i = 0; i < soldiers.Count; i++)
         {
             Vector3 tw = transform.TransformPoint(formationOffsets[i]);
@@ -242,44 +233,47 @@ public class Battalion : MonoBehaviour
         }
     }
 
-    // ===== Overlap Prevention =====
+    Vector3 FlatPos() { var p = transform.position; p.y = 0; return p; }
 
-    bool CheckNearbyBattalion()
+    // ===== Detection =====
+
+    bool IsMineInRange(Vector3 pos)
     {
-        var hits = Physics.OverlapSphere(transform.position, 1.2f);
+        var hits = Physics.OverlapSphere(pos, detectionRange);
+        foreach (var h in hits)
+            if (h.name.StartsWith("GoldMine")) return true;
+        return false;
+    }
+
+    bool IsEnemyInRange(Vector3 pos)
+    {
+        var hits = Physics.OverlapSphere(pos, detectionRange);
         foreach (var h in hits)
         {
             var other = h.GetComponentInParent<Battalion>();
-            if (other != null && other != this)
+            if (other != null && other != this && other.owner != owner)
                 return true;
         }
         return false;
     }
 
-    // ===== Gathering =====
-
-    bool CheckGoldMine(Vector3 pos)
+    public static bool IsGoldMineAt(Vector3 pos)
     {
         var hits = Physics.OverlapSphere(pos, 0.7f);
         foreach (var h in hits)
-            if (h.name == "GoldMine") return true;
+            if (h.name.StartsWith("GoldMine")) return true;
         return false;
     }
 
-    void GatherTick()
+    public static bool IsEnemyAt(Vector3 pos, BattalionOwner myOwner)
     {
-        gatherAccum += Time.deltaTime;
-        if (gatherAccum >= gatherInterval)
+        var hits = Physics.OverlapSphere(pos, 0.7f);
+        foreach (var h in hits)
         {
-            gatherAccum -= gatherInterval;
-            Debug.Log($"[{name}] 采集资源 +10 金");
+            var other = h.GetComponentInParent<Battalion>();
+            if (other != null && other.owner != myOwner) return true;
         }
-        // Keep soldiers in formation near the mine
-        for (int i = 0; i < soldiers.Count; i++)
-        {
-            Vector3 tw = transform.TransformPoint(formationOffsets[i]);
-            soldiers[i].position = Vector3.Lerp(soldiers[i].position, tw, 15f * Time.deltaTime);
-        }
+        return false;
     }
 
     void OnDestroy()

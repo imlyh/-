@@ -10,7 +10,6 @@ public class Soldier : MonoBehaviour
     private Battalion battalion;
     private float cooldownRemaining;
 
-    // Attack state
     private enum SoldierState { Idle, AttackingForward, AttackingBack }
     private SoldierState state = SoldierState.Idle;
     private Vector3 attackOrigin;
@@ -31,7 +30,7 @@ public class Soldier : MonoBehaviour
         switch (state)
         {
             case SoldierState.Idle:
-                CheckForEnemy();
+                CheckForTarget();
                 break;
             case SoldierState.AttackingForward:
                 AttackForwardTick();
@@ -42,37 +41,36 @@ public class Soldier : MonoBehaviour
         }
     }
 
-    void CheckForEnemy()
+    void CheckForTarget()
     {
         if (cooldownRemaining > 0) return;
         if (battalion == null) return;
 
+        var bs = battalion.CurrentState;
+        if (bs != BattalionState.Mining && bs != BattalionState.Attacking)
+            return;
+
         var hits = Physics.OverlapSphere(transform.position, attackRange);
         foreach (var h in hits)
         {
-            // Enemy battalion
-            var otherBattalion = h.GetComponentInParent<Battalion>();
-            if (otherBattalion != null && otherBattalion != battalion && otherBattalion.owner != battalion.owner)
-            {
-                StartAttack(h.transform.position);
-                return;
-            }
+            if (bs == BattalionState.Mining && h.name.StartsWith("GoldMine"))
+            { StartAttack(h.transform.position); return; }
 
-            // Gold mine
-            if (h.name.StartsWith("GoldMine"))
+            if (bs == BattalionState.Attacking)
             {
-                StartAttack(h.transform.position);
-                return;
+                var other = h.GetComponentInParent<Battalion>();
+                if (other != null && other != battalion && other.owner != battalion.owner)
+                { StartAttack(h.transform.position); return; }
             }
         }
     }
 
-    void StartAttack(Vector3 enemyPos)
+    void StartAttack(Vector3 targetPos)
     {
         state = SoldierState.AttackingForward;
         attackOrigin = transform.position;
         attackOrigin.y = 0;
-        attackTarget = enemyPos;
+        attackTarget = targetPos;
         attackTarget.y = 0;
         attackT = 0;
         cooldownRemaining = attackCooldown;
@@ -84,14 +82,12 @@ public class Soldier : MonoBehaviour
     {
         attackT += Time.deltaTime / dashTotalTime;
         float t = Mathf.Clamp01(attackT);
-        float xz = EaseOut(t);
-        Vector3 pos = Vector3.Lerp(attackOrigin, attackTarget, xz);
+        Vector3 pos = Vector3.Lerp(attackOrigin, attackTarget, EaseOut(t));
         pos.y = dashHeight * Mathf.Sin(t * Mathf.PI);
         transform.position = pos;
 
         if (attackT >= 1f)
         {
-            Debug.Log($"[{name}] 冲击{(IsMine(attackTarget) ? "矿脉" : "敌军")}!");
             state = SoldierState.AttackingBack;
             attackT = 0;
         }
@@ -101,8 +97,7 @@ public class Soldier : MonoBehaviour
     {
         attackT += Time.deltaTime / dashTotalTime;
         float t = Mathf.Clamp01(attackT);
-        float xz = EaseOut(t);
-        Vector3 pos = Vector3.Lerp(attackTarget, attackOrigin, xz);
+        Vector3 pos = Vector3.Lerp(attackTarget, attackOrigin, EaseOut(t));
         pos.y = dashHeight * Mathf.Sin(t * Mathf.PI);
         transform.position = pos;
 
@@ -114,14 +109,6 @@ public class Soldier : MonoBehaviour
     }
 
     static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
-
-    static bool IsMine(Vector3 pos)
-    {
-        var hits = Physics.OverlapSphere(pos, 0.5f);
-        foreach (var h in hits)
-            if (h.name.StartsWith("GoldMine")) return true;
-        return false;
-    }
 
     void OnDrawGizmosSelected()
     {

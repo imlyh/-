@@ -54,19 +54,25 @@ public class BattalionCommander : MonoBehaviour
         if (!mouse.rightButton.wasPressedThisFrame) return;
         if (selectedBattalion == null) return;
 
-        // Raycast against ground plane (Y=0)
         var ray = cam.ScreenPointToRay(mouse.position.ReadValue());
         var plane = new Plane(Vector3.up, Vector3.zero);
-        if (plane.Raycast(ray, out float dist))
-        {
-            Vector3 hitPoint = ray.GetPoint(dist);
-            // Snap to nearest grid cell center
-            Vector3 cellCenter = new Vector3(
-                Mathf.Clamp(Mathf.Round(hitPoint.x), 0, 29),
-                0,
-                Mathf.Clamp(Mathf.Round(hitPoint.z), 0, 19)
-            );
-            selectedBattalion.CommandMove(cellCenter);
-        }
+        if (!plane.Raycast(ray, out float dist)) return;
+
+        Vector3 hitPoint = ray.GetPoint(dist);
+        Vector3 cellCenter = new Vector3(
+            Mathf.Clamp(Mathf.Round(hitPoint.x), 0, 29),
+            0,
+            Mathf.Clamp(Mathf.Round(hitPoint.z), 0, 19)
+        );
+
+        CommandType type;
+        if (Battalion.IsGoldMineAt(cellCenter))
+            type = CommandType.Mine;
+        else if (Battalion.IsEnemyAt(cellCenter, selectedBattalion.owner))
+            type = CommandType.Attack;
+        else
+            type = CommandType.Move;
+
+        selectedBattalion.Command(cellCenter, type);
     }
 }
