@@ -9,7 +9,9 @@
         "Unity.Burst",
         "Unity.Transforms",
         "Unity.InputSystem",
-        "UnityEngine.AIModule"
+        "UnityEngine.AIModule",
+        "Opsive.BehaviorDesigner.Runtime",
+        "Opsive.GraphDesigner.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
