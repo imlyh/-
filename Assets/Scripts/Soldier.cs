@@ -50,8 +50,16 @@ public class Soldier : MonoBehaviour
         var hits = Physics.OverlapSphere(transform.position, attackRange);
         foreach (var h in hits)
         {
+            // Enemy battalion
             var otherBattalion = h.GetComponentInParent<Battalion>();
             if (otherBattalion != null && otherBattalion != battalion && otherBattalion.owner != battalion.owner)
+            {
+                StartAttack(h.transform.position);
+                return;
+            }
+
+            // Gold mine
+            if (h.name.StartsWith("GoldMine"))
             {
                 StartAttack(h.transform.position);
                 return;
@@ -83,7 +91,7 @@ public class Soldier : MonoBehaviour
 
         if (attackT >= 1f)
         {
-            Debug.Log($"[{name}] 冲击!");
+            Debug.Log($"[{name}] 冲击{(IsMine(attackTarget) ? "矿脉" : "敌军")}!");
             state = SoldierState.AttackingBack;
             attackT = 0;
         }
@@ -106,6 +114,14 @@ public class Soldier : MonoBehaviour
     }
 
     static float EaseOut(float t) => 1f - (1f - t) * (1f - t);
+
+    static bool IsMine(Vector3 pos)
+    {
+        var hits = Physics.OverlapSphere(pos, 0.5f);
+        foreach (var h in hits)
+            if (h.name.StartsWith("GoldMine")) return true;
+        return false;
+    }
 
     void OnDrawGizmosSelected()
     {
