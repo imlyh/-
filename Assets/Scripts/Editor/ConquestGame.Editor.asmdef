@@ -1,0 +1,14 @@
+{
+    "name": "ConquestGame.Editor",
+    "rootNamespace": "ConquestGame.Editor",
+    "references": [
+        "ConquestGame"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "autoReferenced": false
+}
