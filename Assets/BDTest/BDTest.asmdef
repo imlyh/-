@@ -1,0 +1,12 @@
+{
+    "name": "BDTest",
+    "references": ["Opsive.BehaviorDesigner.Runtime"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
