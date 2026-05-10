@@ -25,9 +25,8 @@ public partial class BattalionInputSystem : SystemBase
             if (Physics.SphereCast(ray, 0.4f, out var hit, 500f))
             {
                 var e = ResolveEntity(hit.collider.gameObject);
-                Debug.Log($"[INPUT] Clicked '{hit.collider.gameObject.name}', entity={e}, hasParent={e!=Entity.Null && EntityManager.HasComponent<Parent>(e)}");
-                if (e != Entity.Null && EntityManager.HasComponent<Parent>(e))
-                    cmd.ValueRW.selectedBattalion = EntityManager.GetComponentData<Parent>(e).Value;
+                if (e != Entity.Null && EntityManager.HasComponent<SoldierData>(e))
+                    cmd.ValueRW.selectedBattalion = EntityManager.GetComponentData<SoldierData>(e).battalionEntity;
                 else cmd.ValueRW.selectedBattalion = Entity.Null;
             }
             else { Debug.Log("[INPUT] Ray missed"); cmd.ValueRW.selectedBattalion = Entity.Null; }
@@ -64,10 +63,10 @@ public partial class BattalionInputSystem : SystemBase
 
     bool CheckEnemyGO(GameObject go, BattalionOwner owner)
     {
-        foreach (var (link, parent) in SystemAPI.Query<RefRO<EntityLink>, RefRO<Parent>>())
+        foreach (var (link, sd) in SystemAPI.Query<RefRO<EntityLink>, RefRO<SoldierData>>())
             if (link.ValueRO.goInstanceID == go.GetInstanceID()
-                && EntityManager.HasComponent<BattalionData>(parent.ValueRO.Value))
-                return EntityManager.GetComponentData<BattalionData>(parent.ValueRO.Value).owner != owner;
+                && EntityManager.HasComponent<BattalionData>(sd.ValueRO.battalionEntity))
+                return EntityManager.GetComponentData<BattalionData>(sd.ValueRO.battalionEntity).owner != owner;
         return false;
     }
 }

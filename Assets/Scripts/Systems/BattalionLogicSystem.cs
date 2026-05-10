@@ -103,9 +103,9 @@ public partial class BattalionLogicSystem : SystemBase
         foreach (var h in Physics.OverlapSphere(new Vector3(pos.x, 0, pos.z), range))
         {
             int id = h.gameObject.GetInstanceID();
-            foreach (var (link, parent) in SystemAPI.Query<RefRO<EntityLink>, RefRO<Parent>>())
+            foreach (var (link, sd) in SystemAPI.Query<RefRO<EntityLink>, RefRO<SoldierData>>())
                 if (link.ValueRO.goInstanceID == id)
-                    return EntityManager.GetComponentData<BattalionData>(parent.ValueRO.Value).owner != owner;
+                    return EntityManager.GetComponentData<BattalionData>(sd.ValueRO.battalionEntity).owner != owner;
         }
         return false;
     }

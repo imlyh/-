@@ -11,21 +11,20 @@ public partial class SoldierSystem : SystemBase
     {
         float dt = SystemAPI.Time.DeltaTime;
 
-        Entities.WithoutBurst().ForEach((
-            ref SoldierData sd, ref LocalTransform ltx,
-            in LocalToWorld ltw, in Parent parent) =>
+        foreach (var (sdRef, ltxRef) in SystemAPI.Query<RefRW<SoldierData>, RefRW<LocalTransform>>())
         {
+            var sd = sdRef.ValueRW;
             if (sd.cooldownRemaining > 0) sd.cooldownRemaining -= dt;
 
-            var batEntity = parent.Value;
-            var batData = EntityManager.GetComponentData<BattalionData>(batEntity);
-            var invBat = math.inverse(EntityManager.GetComponentData<LocalToWorld>(batEntity).Value);
-            float3 worldPos = ltw.Position;
+            var batLTW = SystemAPI.GetComponent<LocalToWorld>(sd.battalionEntity);
+            var batData = SystemAPI.GetComponent<BattalionData>(sd.battalionEntity);
+            var invBat = math.inverse(batLTW.Value);
+            float3 worldPos = batLTW.Position + sd.formationOffset;
 
             switch (sd.actionState)
             {
                 case SoldierActionState.Idle:
-                    ltx.Position = sd.formationOffset;
+                    ltxRef.ValueRW.Position = sd.formationOffset;
                     CheckForTarget(ref sd, worldPos, batData);
                     break;
 
@@ -37,23 +36,25 @@ public partial class SoldierSystem : SystemBase
                         float t = math.clamp(sd.attackT, 0, 1);
                         float3 wp = math.lerp(sd.attackOrigin, sd.attackTarget, EaseOut(t));
                         wp.y += sd.dashHeight * math.sin(t * math.PI);
-                        ltx.Position = math.transform(invBat, wp);
+                        ltxRef.ValueRW.Position = math.transform(invBat, wp);
                     }
                     break;
 
                 case SoldierActionState.AttackingBack:
                     sd.attackT += dt / sd.dashTotalTime;
-                    if (sd.attackT >= 1f) { ltx.Position = sd.formationOffset; sd.actionState = SoldierActionState.Idle; }
+                    if (sd.attackT >= 1f) { ltxRef.ValueRW.Position = sd.formationOffset; sd.actionState = SoldierActionState.Idle; }
                     else
                     {
                         float t = math.clamp(sd.attackT, 0, 1);
                         float3 wp = math.lerp(sd.attackTarget, sd.attackOrigin, EaseOut(t));
                         wp.y += sd.dashHeight * math.sin(t * math.PI);
-                        ltx.Position = math.transform(invBat, wp);
+                        ltxRef.ValueRW.Position = math.transform(invBat, wp);
                     }
                     break;
             }
-        }).Run();
+
+            sdRef.ValueRW = sd;
+        }
     }
 
     void CheckForTarget(ref SoldierData sd, float3 worldPos, BattalionData batData)
@@ -62,23 +63,22 @@ public partial class SoldierSystem : SystemBase
 
         if (batData.state == BattalionState.Attacking)
         {
-            var hits = Physics.OverlapSphere(new Vector3(worldPos.x, 0, worldPos.z), sd.attackRange);
+            var hits = Physics.OverlapSphere((Vector3)worldPos, sd.attackRange);
             float closestDist = float.MaxValue; Vector3 closestPos = Vector3.zero;
             foreach (var h in hits)
             {
                 var owner = GetBattalionOwner(h.gameObject);
                 if (owner.HasValue && owner.Value != batData.owner)
                 {
-                    float d = Vector3.Distance(new Vector3(worldPos.x, 0, worldPos.z), h.transform.position);
+                    float d = Vector3.Distance((Vector3)worldPos, h.transform.position);
                     if (d < closestDist) { closestDist = d; closestPos = h.transform.position; }
                 }
             }
-            if (closestDist < float.MaxValue)
-                StartDash(ref sd, worldPos, closestPos);
+            if (closestDist < float.MaxValue) StartDash(ref sd, worldPos, closestPos);
         }
         else if (batData.state == BattalionState.Mining)
         {
-            var hits = Physics.OverlapSphere(new Vector3(worldPos.x, 0, worldPos.z), sd.attackRange);
+            var hits = Physics.OverlapSphere((Vector3)worldPos, sd.attackRange);
             foreach (var h in hits)
             {
                 if (!h.name.StartsWith("GoldMine")) continue;
@@ -103,9 +103,9 @@ public partial class SoldierSystem : SystemBase
     BattalionOwner? GetBattalionOwner(GameObject go)
     {
         int id = go.GetInstanceID();
-        foreach (var (link, p) in SystemAPI.Query<RefRO<EntityLink>, RefRO<Parent>>())
-            if (link.ValueRO.goInstanceID == id && EntityManager.HasComponent<BattalionData>(p.ValueRO.Value))
-                return EntityManager.GetComponentData<BattalionData>(p.ValueRO.Value).owner;
+        foreach (var (link, sd) in SystemAPI.Query<RefRO<EntityLink>, RefRO<SoldierData>>())
+            if (link.ValueRO.goInstanceID == id && EntityManager.HasComponent<BattalionData>(sd.ValueRO.battalionEntity))
+                return EntityManager.GetComponentData<BattalionData>(sd.ValueRO.battalionEntity).owner;
         return null;
     }
 

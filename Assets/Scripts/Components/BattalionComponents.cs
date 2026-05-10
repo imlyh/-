@@ -32,6 +32,7 @@ public enum SoldierActionState : byte { Idle, AttackingForward, AttackingBack }
 
 public struct SoldierData : IComponentData
 {
+    public Entity battalionEntity;
     public float attackRange;
     public float attackCooldown;
     public float dashSpeed;
