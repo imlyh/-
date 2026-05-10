@@ -9,10 +9,12 @@ using UnityEngine.InputSystem;
 public partial class BattalionInputSystem : SystemBase
 {
     private Camera cam;
-    protected override void OnCreate() { RequireForUpdate<PlayerCommandData>(); cam = Camera.main; }
+    protected override void OnCreate() { RequireForUpdate<PlayerCommandData>(); }
 
     protected override void OnUpdate()
     {
+        if (cam == null) cam = Camera.main;
+        if (cam == null) return;
         var mouse = Mouse.current;
         if (mouse == null) return;
         if (!SystemAPI.TryGetSingletonRW<PlayerCommandData>(out var cmd)) return;
