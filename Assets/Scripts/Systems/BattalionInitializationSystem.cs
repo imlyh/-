@@ -59,7 +59,7 @@ public partial class BattalionInitializationSystem : SystemBase
         em.AddComponentData(e, new BattalionData
         {
             owner=owner, state=BattalionState.Idle,
-            moveSpeed=cfg.moveSpeed, detectionRange=cfg.detectionRange,
+            moveSpeed=cfg.moveSpeed, detectionRange=cfg.attackRange,
             bobHeight=cfg.bobHeight, bobFrequency=cfg.bobFrequency,
             bobPhase=UnityEngine.Random.Range(0f,100f)
         });

@@ -10,7 +10,7 @@ using UnityEngine;
 public class BattalionConfig : ScriptableObject
 {
     [Header("士兵（个体战斗）")]
-    [Tooltip("士兵检测/攻击目标的最大距离，默认1.5")]
+    [Tooltip("检测/攻击范围——士兵单体检测距离，营级也同步此值作为切换Mining/Attacking的触发距离，默认1.5")]
     [Range(0.5f, 5f)] public float attackRange = 1.5f;
 
     [Tooltip("两次攻击冷却时间（秒），默认1.5")]
@@ -25,9 +25,6 @@ public class BattalionConfig : ScriptableObject
     [Header("营（移动 & 阵型）")]
     [Tooltip("移动速度（单位/秒），默认4")]
     [Range(1f, 10f)] public float moveSpeed = 4f;
-
-    [Tooltip("检测范围——营中心进入此距离后从Moving切到Mining/Attacking，默认1.3")]
-    [Range(0.5f, 3f)] public float detectionRange = 1.3f;
 
     [Tooltip("移动弹跳幅度，默认0.2")]
     [Range(0.05f, 1f)] public float bobHeight = 0.2f;

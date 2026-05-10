@@ -55,7 +55,6 @@ public class BattalionConfigWindow : EditorWindow
 
         EditorGUILayout.LabelField("Battalion", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(so.FindProperty("moveSpeed"));
-        EditorGUILayout.PropertyField(so.FindProperty("detectionRange"));
         EditorGUILayout.PropertyField(so.FindProperty("bobHeight"));
         EditorGUILayout.PropertyField(so.FindProperty("bobFrequency"));
         EditorGUILayout.PropertyField(so.FindProperty("formationSpacing"));
