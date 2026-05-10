@@ -7,13 +7,13 @@ using Unity.Mathematics;
 /// ============================================================================
 ///
 /// 【设计思路】
-///   生成 col×row 矩形地图（默认 10×8），城堡和金矿都在地图内部。
+///  生成 col×row 矩形地图（默认 30×20），城堡和金矿都在地图内部。
 ///   玩家城堡在左侧、敌方城堡在右侧，金矿散布中央。
 ///
-/// 【布局（默认 10×8）】
-///   玩家城堡 (0, 4)         敌人城堡 (9, 4)
-///   金矿 (2, 3), (5, 5), (8, 3)
-///   玩家起始战士 (1, 4)  —— 城堡右边
+/// 【布局（默认 30×20）】
+///   玩家城堡 (2, 10)              敌人城堡 (27, 10)
+///   金矿散布中央区域
+///   玩家起始战士 (3, 10)  —— 城堡右边
 /// ============================================================================
 namespace ConquestGame
 {
@@ -30,10 +30,10 @@ namespace ConquestGame
             state.EntityManager.SetName(entity, "MapSettingsData");
             state.EntityManager.AddComponentData(entity, new MapSettingsData
             {
-                MapRadius = 5,
-                PlayerCastlePos = new HexCoordinates(0, 4),
-                EnemyCastlePos = new HexCoordinates(9, 4),
-                GoldMineCount = 3
+                MapRadius = 15,
+                PlayerCastlePos = new HexCoordinates(2, 10),
+                EnemyCastlePos = new HexCoordinates(27, 10),
+                GoldMineCount = 5
             });
         }
 
@@ -44,7 +44,7 @@ namespace ConquestGame
             hasGenerated = true;
 
             var map = SystemAPI.GetSingletonRW<MapSettingsData>();
-            int w = 100, h = 100;
+            int w = 30, h = 20;
             var ecb = new EntityCommandBuffer(state.WorldUpdateAllocator);
 
             // === 生成矩形网格（城堡和金矿都在网格内）===
@@ -80,7 +80,7 @@ namespace ConquestGame
             }
 
             // === 玩家起始战士 ===
-            var spawnCoord = new HexCoordinates(1, 4);
+            var spawnCoord = new HexCoordinates(3, 10);
             var startUnit = ecb.CreateEntity();
             ecb.SetName(startUnit, "PlayerWarrior_1");
             ecb.AddComponent(startUnit, new UnitData
@@ -121,9 +121,7 @@ namespace ConquestGame
         {
             if (coord == s.PlayerCastlePos || coord == s.EnemyCastlePos)
                 return CellType.Castle;
-            if (coord == new HexCoordinates(2, 3) ||
-                coord == new HexCoordinates(5, 5) ||
-                coord == new HexCoordinates(8, 3))
+            if (IsGoldMineCoord(coord))
                 return CellType.GoldMine;
             return CellType.Plain;
         }
@@ -133,6 +131,16 @@ namespace ConquestGame
             if (coord == s.PlayerCastlePos) return OwnerType.Player;
             if (coord == s.EnemyCastlePos) return OwnerType.Enemy;
             return OwnerType.None;
+        }
+
+        private static bool IsGoldMineCoord(HexCoordinates coord)
+        {
+            // 散布在中央区域（列 6~24，行 4~16 的范围内均匀分布 5 个）
+            return coord == new HexCoordinates(8, 6) ||
+                   coord == new HexCoordinates(15, 10) ||
+                   coord == new HexCoordinates(22, 14) ||
+                   coord == new HexCoordinates(10, 14) ||
+                   coord == new HexCoordinates(20, 6);
         }
     }
 }

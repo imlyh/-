@@ -1,4 +1,4 @@
 ﻿<Solution>
   <Project Path="ConquestGame.csproj" />
-  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Locus.Editor.csproj" />
 </Solution>
