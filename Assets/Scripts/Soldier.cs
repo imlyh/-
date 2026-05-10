@@ -9,6 +9,7 @@ public class Soldier : MonoBehaviour
 
     private Battalion battalion;
     private float cooldownRemaining;
+    private int soldierIndex = -1;
 
     private enum SoldierState { Idle, AttackingForward, AttackingBack }
     private SoldierState state = SoldierState.Idle;
@@ -20,6 +21,9 @@ public class Soldier : MonoBehaviour
     void Awake()
     {
         battalion = GetComponentInParent<Battalion>();
+        // Extract index from name "Soldier_N"
+        var parts = name.Split('_');
+        if (parts.Length > 1) int.TryParse(parts[1], out soldierIndex);
     }
 
     void Update()
@@ -51,16 +55,38 @@ public class Soldier : MonoBehaviour
             return;
 
         var hits = Physics.OverlapSphere(transform.position, attackRange);
-        foreach (var h in hits)
-        {
-            if (bs == BattalionState.Mining && h.name.StartsWith("GoldMine"))
-            { StartAttack(h.transform.position); return; }
 
-            if (bs == BattalionState.Attacking)
+        if (bs == BattalionState.Attacking)
+        {
+            // Find closest enemy soldier
+            Transform closest = null;
+            float closestDist = float.MaxValue;
+            foreach (var h in hits)
             {
-                var other = h.GetComponentInParent<Battalion>();
-                if (other != null && other != battalion && other.owner != battalion.owner)
-                { StartAttack(h.transform.position); return; }
+                var otherBat = h.GetComponentInParent<Battalion>();
+                if (otherBat == null || otherBat == battalion || otherBat.owner == battalion.owner)
+                    continue;
+                float d = Vector3.Distance(transform.position, h.transform.position);
+                if (d < closestDist) { closestDist = d; closest = h.transform; }
+            }
+            if (closest != null)
+            { StartAttack(closest.position); return; }
+        }
+
+        if (bs == BattalionState.Mining)
+        {
+            foreach (var h in hits)
+            {
+                if (!h.name.StartsWith("GoldMine")) continue;
+                // Offset target by soldier index to spread out
+                Vector3 offset = Vector3.zero;
+                if (soldierIndex >= 0)
+                {
+                    float angle = soldierIndex * Mathf.PI * 0.5f;
+                    offset = new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * 0.4f;
+                }
+                StartAttack(h.transform.position + offset);
+                return;
             }
         }
     }

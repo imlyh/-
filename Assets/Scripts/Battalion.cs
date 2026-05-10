@@ -124,8 +124,9 @@ public class Battalion : MonoBehaviour
     {
         switch (state)
         {
-            case BattalionState.Moving:  MoveTick(); break;
-            case BattalionState.Mining:  MiningTick(); break;
+            case BattalionState.Idle:      IdleTick(); break;
+            case BattalionState.Moving:    MoveTick(); break;
+            case BattalionState.Mining:    MiningTick(); break;
             case BattalionState.Attacking: AttackTick(); break;
         }
     }
@@ -169,6 +170,17 @@ public class Battalion : MonoBehaviour
         target.y = 0;
         if (pathPoints.Count == 0 || pathPoints[pathPoints.Count - 1] != target)
             pathPoints.Add(target);
+    }
+
+    // ===== IdleTick =====
+
+    void IdleTick()
+    {
+        if (IsEnemyInRange(FlatPos()))
+        {
+            currentCommand = CommandType.Attack;
+            state = BattalionState.Attacking;
+        }
     }
 
     // ===== MoveTick =====
