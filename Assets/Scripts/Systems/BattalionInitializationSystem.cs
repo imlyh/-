@@ -60,8 +60,8 @@ public partial class BattalionInitializationSystem : SystemBase
             });
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = $"{name}_S{i}_GO";
-            go.transform.localScale = Vector3.one * 0.5f;
-            go.transform.position = new Vector3(pos.x+off[i].x, 0.2f, pos.z+off[i].z);
+            go.transform.localScale = Vector3.one * 0.35f;
+            go.transform.position = new Vector3(pos.x+off[i].x, pos.y, pos.z+off[i].z);
             go.layer = layer;
             go.tag = owner==BattalionOwner.Player?"PlayerUnit":"EnemyUnit";
             go.GetComponent<MeshRenderer>().material = mat;

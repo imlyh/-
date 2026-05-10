@@ -25,6 +25,7 @@ public partial class BattalionLogicSystem : SystemBase
 
             if (cmd.ValueRW.pending && cmd.ValueRW.selectedBattalion == entity)
             {
+                Debug.Log($"[LOGIC] Processing command: type={cmd.ValueRW.commandType} target={cmd.ValueRW.targetCell}");
                 b.targetCell = cmd.ValueRW.targetCell;
                 b.commandType = cmd.ValueRW.commandType;
                 BuildPath(tx.Position, b.targetCell, pathBuf);
