@@ -190,6 +190,13 @@ public class Battalion : MonoBehaviour
             return;
         }
 
+        // Stop if too close to another battalion (no overlap, attack range trigger)
+        if (CheckNearbyBattalion())
+        {
+            state = BattalionState.Idle;
+            return;
+        }
+
         Vector3 target = pathPoints[pathIndex];
         Vector3 flatPos = transform.position;
         flatPos.y = 0;
@@ -219,6 +226,20 @@ public class Battalion : MonoBehaviour
             Vector3 tw = transform.TransformPoint(formationOffsets[i]);
             soldiers[i].position = Vector3.Lerp(soldiers[i].position, tw, 15f * Time.deltaTime);
         }
+    }
+
+    // ===== Overlap Prevention =====
+
+    bool CheckNearbyBattalion()
+    {
+        var hits = Physics.OverlapSphere(transform.position, 1.2f);
+        foreach (var h in hits)
+        {
+            var other = h.GetComponentInParent<Battalion>();
+            if (other != null && other != this)
+                return true;
+        }
+        return false;
     }
 
     // ===== Gathering =====
