@@ -25,11 +25,12 @@ public partial class BattalionInputSystem : SystemBase
             if (Physics.Raycast(ray, out var hit, 500f))
             {
                 var e = ResolveEntity(hit.collider.gameObject);
+                Debug.Log($"[INPUT] Clicked '{hit.collider.gameObject.name}', entity={e}, hasParent={e!=Entity.Null && EntityManager.HasComponent<Parent>(e)}");
                 if (e != Entity.Null && EntityManager.HasComponent<Parent>(e))
                     cmd.ValueRW.selectedBattalion = EntityManager.GetComponentData<Parent>(e).Value;
                 else cmd.ValueRW.selectedBattalion = Entity.Null;
             }
-            else cmd.ValueRW.selectedBattalion = Entity.Null;
+            else { Debug.Log("[INPUT] Ray missed"); cmd.ValueRW.selectedBattalion = Entity.Null; }
         }
 
         if (mouse.rightButton.wasPressedThisFrame && cmd.ValueRW.selectedBattalion != Entity.Null)
