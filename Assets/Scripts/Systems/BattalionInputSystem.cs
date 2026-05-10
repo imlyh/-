@@ -25,7 +25,9 @@ public partial class BattalionInputSystem : SystemBase
             if (Physics.Raycast(ray, out var hit, 500f))
             {
                 var e = ResolveEntity(hit.collider.gameObject);
-                cmd.ValueRW.selectedBattalion = e != Entity.Null ? EntityManager.GetComponentData<Parent>(e).Value : Entity.Null;
+                if (e != Entity.Null && EntityManager.HasComponent<Parent>(e))
+                    cmd.ValueRW.selectedBattalion = EntityManager.GetComponentData<Parent>(e).Value;
+                else cmd.ValueRW.selectedBattalion = Entity.Null;
             }
             else cmd.ValueRW.selectedBattalion = Entity.Null;
         }
@@ -62,7 +64,8 @@ public partial class BattalionInputSystem : SystemBase
     bool CheckEnemyGO(GameObject go, BattalionOwner owner)
     {
         foreach (var (link, parent) in SystemAPI.Query<RefRO<EntityLink>, RefRO<Parent>>())
-            if (link.ValueRO.goInstanceID == go.GetInstanceID())
+            if (link.ValueRO.goInstanceID == go.GetInstanceID()
+                && EntityManager.HasComponent<BattalionData>(parent.ValueRO.Value))
                 return EntityManager.GetComponentData<BattalionData>(parent.ValueRO.Value).owner != owner;
         return false;
     }
