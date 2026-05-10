@@ -36,6 +36,7 @@ public partial class BattalionInitializationSystem : SystemBase
         var e = em.CreateEntity();
         em.SetName(e, name);
         em.AddComponentData(e, LocalTransform.FromPosition(pos));
+        em.AddComponentData(e, new LocalToWorld{Value=float4x4.Translate(pos)});
         em.AddComponentData(e, new BattalionData
         {
             owner=owner, state=BattalionState.Idle, moveSpeed=4f,
