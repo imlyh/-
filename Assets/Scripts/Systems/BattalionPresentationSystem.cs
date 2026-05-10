@@ -1,54 +1,41 @@
 using Unity.Entities;
 using Unity.Transforms;
-using Unity.Collections;
-using Unity.Mathematics;
 using UnityEngine;
 using System.Collections.Generic;
 
 [UpdateInGroup(typeof(PresentationSystemGroup))]
-public partial struct BattalionPresentationSystem : ISystem
+public partial class BattalionPresentationSystem : SystemBase
 {
-    private Dictionary<int, GameObject> goMap;
+    private Dictionary<int, GameObject> goMap = new();
 
-    public void OnCreate(ref SystemState state)
+    protected override void OnCreate() { RequireForUpdate<PlayerCommandData>(); }
+
+    protected override void OnUpdate()
     {
-        goMap = new Dictionary<int, GameObject>();
-        state.RequireForUpdate<PlayerCommandData>();
-    }
-
-    public void OnUpdate(ref SystemState state)
-    {
-        var cmd = SystemAPI.GetSingleton<PlayerCommandData>();
-
-        // Build GO map lazily
-        foreach (var (link, ltw, entity) in
-            SystemAPI.Query<RefRO<EntityLink>, RefRO<LocalToWorld>>().WithEntityAccess())
+        Entities.WithoutBurst().ForEach((in EntityLink link, in LocalToWorld ltw) =>
         {
-            int id = link.ValueRO.goInstanceID;
+            int id = link.goInstanceID;
             if (!goMap.TryGetValue(id, out var go))
             {
                 go = FindGO(id);
-                if (go == null) continue;
+                if (go == null) return;
                 goMap[id] = go;
             }
-
-            // Sync transform: ECS world position → GameObject world position
-            var pos = ltw.ValueRO.Position;
-            go.transform.position = new Vector3(pos.x, pos.y, pos.z);
-        }
+            var p = ltw.Position;
+            go.transform.position = new Vector3(p.x, p.y, p.z);
+        }).Run();
     }
 
-    public void OnDestroy(ref SystemState state)
+    protected override void OnDestroy()
     {
-        foreach (var kv in goMap) Object.Destroy(kv.Value);
+        foreach (var kv in goMap) if (kv.Value) Object.Destroy(kv.Value);
         goMap.Clear();
     }
 
     GameObject FindGO(int instanceID)
     {
         var all = Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        foreach (var g in all)
-            if (g.GetInstanceID() == instanceID) return g;
+        foreach (var g in all) if (g.GetInstanceID() == instanceID) return g;
         return null;
     }
 }
