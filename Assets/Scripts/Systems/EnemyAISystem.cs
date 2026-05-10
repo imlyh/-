@@ -1,70 +1,67 @@
 using Unity.Entities;
 using Unity.Transforms;
 using Unity.Mathematics;
+using UnityEngine;
 
-namespace ConquestGame
+[UpdateInGroup(typeof(SimulationSystemGroup))]
+[UpdateBefore(typeof(BattalionLogicSystem))]
+public partial class EnemyAISystem : SystemBase
 {
-    /// <summary>
-    /// 第6个执行的System —— 定时出兵 + 敌方单位向玩家城堡推进
-    /// </summary>
-    [UpdateInGroup(typeof(SimulationSystemGroup))]
-    [UpdateAfter(typeof(ProductionSystem))]
-    public partial struct EnemyAISystem : ISystem
+    protected override void OnUpdate()
     {
-        private int spawnCount;
+        float dt = SystemAPI.Time.DeltaTime;
 
-        public void OnUpdate(ref SystemState state)
+        foreach (var (aiRef, batRef, txRef, entity) in
+            SystemAPI.Query<RefRW<EnemyAIData>, RefRW<BattalionData>, RefRO<LocalTransform>>()
+            .WithEntityAccess())
         {
-            float dt = SystemAPI.Time.DeltaTime;
-            var gameTime = SystemAPI.GetSingleton<GameTimeData>();
-            var mapSettings = SystemAPI.GetSingleton<MapSettingsData>();
+            var ai = aiRef.ValueRW;
+            var bat = batRef.ValueRW;
+            var pos = txRef.ValueRO.Position;
+            ai.phaseTimer += dt;
 
-            var spawner = SystemAPI.GetSingletonRW<EnemySpawnerData>();
-            var ecb = new EntityCommandBuffer(state.WorldUpdateAllocator);
-
-            // 出兵计时
-            spawner.ValueRW.Timer += dt * gameTime.SpeedMultiplier;
-            if (spawner.ValueRO.Timer >= spawner.ValueRO.Interval)
+            switch (ai.phase)
             {
-                spawner.ValueRW.Timer -= spawner.ValueRO.Interval;
-                spawnCount++;
+                case EnemyAIPhase.GoMine:
+                    if (bat.state == BattalionState.Idle)
+                    {
+                        bat.targetCell = ai.mineTarget;
+                        bat.commandType = CommandType.Mine;
+                        bat.state = BattalionState.Moving;
+                    }
+                    if (bat.state == BattalionState.Mining)
+                    { ai.phase = EnemyAIPhase.Mining; ai.phaseTimer = 0; }
+                    if (bat.state == BattalionState.Idle && !MineInRange(pos, bat.detectionRange))
+                    { bat.targetCell = ai.mineTarget; bat.commandType = CommandType.Mine; bat.state = BattalionState.Moving; }
+                    break;
 
-                var spawnPos = mapSettings.EnemyCastlePos;
-                var enemy = ecb.CreateEntity();
-                ecb.SetName(enemy, $"EnemyWarrior_{spawnCount}");
-                ecb.AddComponent(enemy, new UnitData
-                {
-                    Attack = 10,
-                    Defense = 5,
-                    Health = 100,
-                    MaxHealth = 100,
-                    MoveSpeed = 0.8f,
-                    Owner = OwnerType.Enemy,
-                    State = UnitState.Moving,
-                    CurrentPosition = spawnPos,
-                    TargetPosition = mapSettings.PlayerCastlePos,
-                    MoveTimer = 0f,
-                    CombatTimer = 0f
-                });
-                ecb.AddComponent(enemy, LocalTransform.FromPosition(
-                    HexUtils.ToWorldPosition(spawnPos)));
+                case EnemyAIPhase.Mining:
+                    if (!MineInRange(pos, bat.detectionRange))
+                    { bat.targetCell = ai.mineTarget; bat.commandType = CommandType.Mine; bat.state = BattalionState.Moving; ai.phase = EnemyAIPhase.GoMine; }
+                    else if (ai.phaseTimer >= ai.miningDuration)
+                    { bat.targetCell = ai.castlePos; bat.commandType = CommandType.Move; bat.state = BattalionState.Moving; ai.phase = EnemyAIPhase.ReturnCastle; ai.phaseTimer = 0; }
+                    break;
+
+                case EnemyAIPhase.ReturnCastle:
+                    if (bat.state == BattalionState.Idle)
+                    { bat.targetCell = ai.enemyCastlePos; bat.commandType = CommandType.Attack; bat.state = BattalionState.Moving; ai.phase = EnemyAIPhase.AttackCastle; ai.phaseTimer = 0; }
+                    break;
+
+                case EnemyAIPhase.AttackCastle:
+                    if (ai.phaseTimer > 15f)
+                    { bat.targetCell = ai.mineTarget; bat.commandType = CommandType.Mine; bat.state = BattalionState.Moving; ai.phase = EnemyAIPhase.GoMine; ai.phaseTimer = 0; }
+                    break;
             }
 
-            // 空闲的敌方单位自动向玩家城堡推进
-            foreach (var (unit, entity) in
-                SystemAPI.Query<RefRW<UnitData>>().WithEntityAccess())
-            {
-                if (unit.ValueRO.Owner != OwnerType.Enemy)
-                    continue;
-                if (unit.ValueRO.State != UnitState.Idle)
-                    continue;
-
-                unit.ValueRW.TargetPosition = mapSettings.PlayerCastlePos;
-                unit.ValueRW.State = UnitState.Moving;
-                unit.ValueRW.MoveTimer = 0f;
-            }
-
-            ecb.Playback(state.EntityManager);
+            aiRef.ValueRW = ai;
+            batRef.ValueRW = bat;
         }
+    }
+
+    bool MineInRange(float3 pos, float range)
+    {
+        foreach (var h in Physics.OverlapSphere(new Vector3(pos.x, 0, pos.z), range))
+            if (h.name.StartsWith("GoldMine")) return true;
+        return false;
     }
 }

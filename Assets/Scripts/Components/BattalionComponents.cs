@@ -62,3 +62,17 @@ public struct EntityLink : IComponentData
 {
     public int goInstanceID;
 }
+
+// ---- Enemy AI ----
+
+public enum EnemyAIPhase : byte { GoMine, Mining, ReturnCastle, AttackCastle }
+
+public struct EnemyAIData : IComponentData
+{
+    public EnemyAIPhase phase;
+    public float phaseTimer;
+    public float3 mineTarget;
+    public float3 castlePos;
+    public float3 enemyCastlePos;
+    public float miningDuration;
+}
