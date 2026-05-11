@@ -106,10 +106,20 @@ public partial class BattalionLogicSystem : SystemBase
         foreach (var h in Physics.OverlapSphere(new Vector3(pos.x, 0, pos.z), range))
         {
             int id = h.gameObject.GetInstanceID();
+            // Enemy soldier
             foreach (var (link, sd) in SystemAPI.Query<RefRO<EntityLink>, RefRO<SoldierData>>())
                 if (link.ValueRO.goInstanceID == id)
                     return EntityManager.GetComponentData<BattalionData>(sd.ValueRO.battalionEntity).owner != owner;
+            // Enemy castle
+            if (h.name.Contains("Castle") && IsEnemyCastle(h, owner)) return true;
         }
+        return false;
+    }
+
+    bool IsEnemyCastle(UnityEngine.Collider h, BattalionOwner myOwner)
+    {
+        if (h.name.Contains("Player") && myOwner == BattalionOwner.Enemy) return true;
+        if (h.name.Contains("Enemy") && myOwner == BattalionOwner.Player) return true;
         return false;
     }
 }

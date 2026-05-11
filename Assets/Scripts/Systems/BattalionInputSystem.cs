@@ -62,6 +62,7 @@ public partial class BattalionInputSystem : SystemBase
             {
                 if (h.name.StartsWith("GoldMine")) isMine=true;
                 else if (CheckEnemyGO(h.gameObject, batData.owner)) isEnemy=true;
+                else if (h.name.Contains("Castle") && IsEnemyCastle(h.gameObject, batData.owner)) isEnemy=true;
             }
             if (isMine) type=CommandType.Mine;
             else if (isEnemy) type=CommandType.Attack;
@@ -74,6 +75,13 @@ public partial class BattalionInputSystem : SystemBase
         foreach (var (link, entity) in SystemAPI.Query<RefRO<EntityLink>>().WithEntityAccess())
             if (link.ValueRO.goInstanceID == go.GetInstanceID()) return entity;
         return Entity.Null;
+    }
+
+    bool IsEnemyCastle(GameObject go, BattalionOwner myOwner)
+    {
+        if (go.name.Contains("Player") && myOwner == BattalionOwner.Enemy) return true;
+        if (go.name.Contains("Enemy") && myOwner == BattalionOwner.Player) return true;
+        return false;
     }
 
     bool CheckEnemyGO(GameObject go, BattalionOwner owner)
