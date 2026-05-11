@@ -11,77 +11,192 @@ public class ShopUI : MonoBehaviour
     private GameObject panel;
     private Text goldText;
     private Button buyBtn;
+    private Text buyBtnLabel;
 
     void Start()
     {
         Instance = this;
+
+        // --- Canvas ---
         var canvas = gameObject.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 200;
-        gameObject.AddComponent<UnityEngine.UI.CanvasScaler>();
-        gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+        gameObject.AddComponent<CanvasScaler>();
+        gameObject.AddComponent<GraphicRaycaster>();
 
+        // --- Ensure EventSystem exists (required for UI clicks) ---
+        if (FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
+        {
+            var esGo = new GameObject("EventSystem");
+            esGo.AddComponent<UnityEngine.EventSystems.EventSystem>();
+            esGo.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+        }
+
+        // --- Panel ---
         panel = new GameObject("ShopPanel");
-        panel.transform.SetParent(transform);
-        var prt = panel.AddComponent<RectTransform>();
-        prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
-        prt.sizeDelta = new Vector2(300, 200);
-        prt.anchoredPosition = Vector2.zero;
-        panel.AddComponent<Image>().color = new Color(0.1f, 0.1f, 0.15f, 0.95f);
+        panel.transform.SetParent(transform, false);
+        var panelRT = panel.AddComponent<RectTransform>();
+        panelRT.anchorMin = panelRT.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRT.sizeDelta = new Vector2(340, 260);
+        panelRT.anchoredPosition = Vector2.zero;
+        var panelBg = panel.AddComponent<Image>();
+        panelBg.color = new Color(0.08f, 0.08f, 0.12f, 0.96f);
+        panelBg.raycastTarget = false; // background only
 
-        var title = MakeText(panel.transform, "城堡商店", 22, Color.white, TextAnchor.MiddleCenter);
-        var tr = title.rectTransform;
-        tr.anchorMin = new Vector2(0, 1); tr.anchorMax = new Vector2(1, 1);
-        tr.sizeDelta = new Vector2(0, 40); tr.anchoredPosition = new Vector2(0, -20);
+        // --- Title bar ---
+        var titleBar = new GameObject("TitleBar");
+        titleBar.transform.SetParent(panel.transform, false);
+        var tbRT = titleBar.AddComponent<RectTransform>();
+        tbRT.anchorMin = new Vector2(0, 1); tbRT.anchorMax = new Vector2(1, 1);
+        tbRT.pivot = new Vector2(0.5f, 1f);
+        tbRT.sizeDelta = new Vector2(0, 44);
+        tbRT.anchoredPosition = Vector2.zero;
+        titleBar.AddComponent<Image>().color = new Color(0.15f, 0.15f, 0.22f, 1f);
+        titleBar.GetComponent<Image>().raycastTarget = false; // background only
 
-        goldText = MakeText(panel.transform, "", 16, new Color(1f, 0.85f, 0.2f), TextAnchor.MiddleCenter);
-        var gr = goldText.rectTransform;
-        gr.anchorMin = gr.anchorMax = new Vector2(0.5f, 0.7f);
-        gr.sizeDelta = new Vector2(200, 30); gr.anchoredPosition = Vector2.zero;
+        MakeText(titleBar.transform, "城 堡 商 店", 22, new Color(1f, 0.9f, 0.5f),
+            TextAnchor.MiddleCenter).rectTransform.anchoredPosition = Vector2.zero;
 
-        buyBtn = MakeButton(panel.transform, "招募一营 (40G)", new Vector2(0.2f, 0.3f), new Vector2(0.8f, 0.5f),
-            new Color(0.2f, 0.5f, 0.2f), OnBuy);
+        // --- Close button (top-right of title bar) ---
+        var closeBtn = new GameObject("CloseBtn");
+        closeBtn.transform.SetParent(titleBar.transform, false);
+        var cbRT = closeBtn.AddComponent<RectTransform>();
+        cbRT.anchorMin = new Vector2(1, 0.5f); cbRT.anchorMax = new Vector2(1, 0.5f);
+        cbRT.pivot = new Vector2(1, 0.5f);
+        cbRT.sizeDelta = new Vector2(36, 36);
+        cbRT.anchoredPosition = new Vector2(-6, 0);
+        closeBtn.AddComponent<Image>().color = new Color(0.7f, 0.15f, 0.15f, 1f);
+        var cb = closeBtn.AddComponent<Button>();
+        cb.onClick.AddListener(() => panel.SetActive(false));
+        MakeText(closeBtn.transform, "X", 18, Color.white, TextAnchor.MiddleCenter);
 
-        MakeButton(panel.transform, "X", new Vector2(0.85f, 0.85f), new Vector2(1f, 1f),
-            new Color(0.6f, 0.1f, 0.1f), () => panel.SetActive(false));
+        // --- Separator below title ---
+        var sep = new GameObject("Separator");
+        sep.transform.SetParent(panel.transform, false);
+        var sepRT = sep.AddComponent<RectTransform>();
+        sepRT.anchorMin = new Vector2(0.05f, 1); sepRT.anchorMax = new Vector2(0.95f, 1);
+        sepRT.pivot = new Vector2(0.5f, 1f);
+        sepRT.sizeDelta = new Vector2(0, 2);
+        sepRT.anchoredPosition = new Vector2(0, -46);
+        sep.AddComponent<Image>().color = new Color(0.4f, 0.35f, 0.2f, 0.8f);
+        sep.GetComponent<Image>().raycastTarget = false;
+
+        // --- Gold text ---
+        var goldGo = new GameObject("GoldText");
+        goldGo.transform.SetParent(panel.transform, false);
+        var goldRT = goldGo.AddComponent<RectTransform>();
+        goldRT.anchorMin = new Vector2(0, 1); goldRT.anchorMax = new Vector2(1, 1);
+        goldRT.pivot = new Vector2(0.5f, 1f);
+        goldRT.sizeDelta = new Vector2(-40, 24);
+        goldRT.anchoredPosition = new Vector2(0, -58);
+        goldText = goldGo.AddComponent<Text>();
+        goldText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        goldText.fontSize = 18;
+        goldText.color = new Color(1f, 0.85f, 0.2f);
+        goldText.alignment = TextAnchor.MiddleCenter;
+
+        // --- Info text ---
+        var infoGo = new GameObject("InfoText");
+        infoGo.transform.SetParent(panel.transform, false);
+        var infoRT = infoGo.AddComponent<RectTransform>();
+        infoRT.anchorMin = new Vector2(0, 1); infoRT.anchorMax = new Vector2(1, 1);
+        infoRT.pivot = new Vector2(0.5f, 1f);
+        infoRT.sizeDelta = new Vector2(-40, 20);
+        infoRT.anchoredPosition = new Vector2(0, -84);
+        var infoText = infoGo.AddComponent<Text>();
+        infoText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        infoText.fontSize = 13;
+        infoText.color = new Color(0.6f, 0.6f, 0.65f);
+        infoText.alignment = TextAnchor.MiddleCenter;
+        infoText.text = "招募一营 4 名战士 · 点击地图指挥移动";
+
+        // --- Separator 2 ---
+        var sep2 = new GameObject("Separator2");
+        sep2.transform.SetParent(panel.transform, false);
+        var sep2RT = sep2.AddComponent<RectTransform>();
+        sep2RT.anchorMin = new Vector2(0.2f, 1); sep2RT.anchorMax = new Vector2(0.8f, 1);
+        sep2RT.pivot = new Vector2(0.5f, 1f);
+        sep2RT.sizeDelta = new Vector2(0, 1);
+        sep2RT.anchoredPosition = new Vector2(0, -110);
+        sep2.AddComponent<Image>().color = new Color(0.3f, 0.3f, 0.35f, 0.5f);
+        sep2.GetComponent<Image>().raycastTarget = false;
+
+        // --- Buy button ---
+        var buyGo = new GameObject("BuyBtn");
+        buyGo.transform.SetParent(panel.transform, false);
+        var buyRT = buyGo.AddComponent<RectTransform>();
+        buyRT.anchorMin = new Vector2(0.15f, 1); buyRT.anchorMax = new Vector2(0.85f, 1);
+        buyRT.pivot = new Vector2(0.5f, 1f);
+        buyRT.sizeDelta = new Vector2(0, 52);
+        buyRT.anchoredPosition = new Vector2(0, -176);
+        buyGo.AddComponent<Image>().color = new Color(0.15f, 0.55f, 0.2f, 1f);
+        buyBtn = buyGo.AddComponent<Button>();
+        buyBtn.onClick.AddListener(OnBuy);
+
+        buyBtnLabel = MakeText(buyGo.transform, "招募 -40G", 20, Color.white, TextAnchor.MiddleCenter);
+        buyBtnLabel.rectTransform.anchoredPosition = Vector2.zero;
+        // Ensure label fills button
+        buyBtnLabel.rectTransform.anchorMin = Vector2.zero;
+        buyBtnLabel.rectTransform.anchorMax = Vector2.one;
+        buyBtnLabel.rectTransform.sizeDelta = Vector2.zero;
+
+        // --- Footer ---
+        var footer = new GameObject("Footer");
+        footer.transform.SetParent(panel.transform, false);
+        var ftRT = footer.AddComponent<RectTransform>();
+        ftRT.anchorMin = new Vector2(0, 0); ftRT.anchorMax = new Vector2(1, 0);
+        ftRT.pivot = new Vector2(0.5f, 0f);
+        ftRT.sizeDelta = new Vector2(0, 24);
+        ftRT.anchoredPosition = Vector2.zero;
+        var ftText = footer.AddComponent<Text>();
+        ftText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        ftText.fontSize = 11;
+        ftText.color = new Color(0.35f, 0.35f, 0.4f);
+        ftText.alignment = TextAnchor.MiddleCenter;
+        ftText.text = "点击城堡可再次打开商店";
 
         panel.SetActive(false);
     }
 
     Text MakeText(Transform parent, string txt, int size, Color color, TextAnchor anchor)
     {
-        var go = new GameObject("Txt"); go.transform.SetParent(parent);
+        var go = new GameObject("Txt"); go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(200, size + 8);
         var t = go.AddComponent<Text>();
         t.text = txt; t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         t.fontSize = size; t.color = color; t.alignment = anchor;
+        t.raycastTarget = false;
         return t;
     }
 
-    Button MakeButton(Transform parent, string label, Vector2 aMin, Vector2 aMax, Color col, UnityEngine.Events.UnityAction cb)
+    public void SetOpen(bool open)
     {
-        var go = new GameObject("Btn"); go.transform.SetParent(parent);
-        var rt = go.AddComponent<RectTransform>();
-        rt.anchorMin = aMin; rt.anchorMax = aMax; rt.sizeDelta = Vector2.zero;
-        go.AddComponent<Image>().color = col;
-        var b = go.AddComponent<Button>(); b.onClick.AddListener(cb);
-        var t = MakeText(go.transform, label, 18, Color.white, TextAnchor.MiddleCenter);
-        var tr = t.rectTransform; tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
-        t.fontSize = label == "X" ? 18 : 16;
-        return b;
+        panel.SetActive(open);
+        if (open) RefreshGold();
     }
-
-    public void SetOpen(bool open) { panel.SetActive(open); }
 
     void Update()
     {
         if (!panel.activeSelf) return;
+        RefreshGold();
+    }
+
+    void RefreshGold()
+    {
         var w = World.DefaultGameObjectInjectionWorld;
         if (w == null || !w.IsCreated) return;
         var q = w.EntityManager.CreateEntityQuery(typeof(PlayerGoldData));
         if (q.TryGetSingleton<PlayerGoldData>(out var gold))
         {
-            goldText.text = $"持有: {gold.gold} G";
-            buyBtn.interactable = gold.gold >= 40;
+            goldText.text = $"持有 {gold.gold} G";
+            bool canBuy = gold.gold >= 40;
+            buyBtn.interactable = canBuy;
+            buyBtnLabel.text = canBuy ? "招募一营 -40G" : $"招募一营 -40G (不足{(int)(40 - gold.gold)}G)";
+            buyBtn.GetComponent<Image>().color = canBuy
+                ? new Color(0.15f, 0.55f, 0.2f, 1f)
+                : new Color(0.3f, 0.3f, 0.3f, 0.8f);
         }
     }
 
