@@ -77,8 +77,17 @@ public partial class SoldierSystem : SystemBase
             float closestDist = float.MaxValue; Vector3 closestPos = Vector3.zero;
             foreach (var h in hits)
             {
+                bool valid = false;
+                // Enemy soldier
                 var owner = GetBattalionOwner(h.gameObject);
-                if (owner.HasValue && owner.Value != batData.owner)
+                if (owner.HasValue && owner.Value != batData.owner) valid = true;
+                // Castle (check if GO name contains "Castle" and belongs to enemy)
+                if (h.name.Contains("Castle"))
+                {
+                    var castleOwner = GetGOOwner(h.gameObject);
+                    if (castleOwner.HasValue && castleOwner.Value != batData.owner) valid = true;
+                }
+                if (valid)
                 {
                     float d = Vector3.Distance((Vector3)worldPos, h.transform.position);
                     if (d < closestDist) { closestDist = d; closestPos = h.transform.position; }
@@ -108,6 +117,18 @@ public partial class SoldierSystem : SystemBase
         sd.attackTarget = new float3(target.x, 0, target.z);
         sd.attackT = 0; sd.cooldownRemaining = sd.attackCooldown;
         sd.dashTotalTime = math.max(0.08f, math.distance(sd.attackOrigin, sd.attackTarget) / sd.dashSpeed);
+    }
+
+    BattalionOwner? GetGOOwner(GameObject go)
+    {
+        int id = go.GetInstanceID();
+        foreach (var (link, hp) in SystemAPI.Query<RefRO<EntityLink>, RefRO<HealthData>>())
+            if (link.ValueRO.goInstanceID == id)
+            {
+                if (go.name.Contains("Player")) return BattalionOwner.Player;
+                if (go.name.Contains("Enemy")) return BattalionOwner.Enemy;
+            }
+        return null;
     }
 
     BattalionOwner? GetBattalionOwner(GameObject go)
