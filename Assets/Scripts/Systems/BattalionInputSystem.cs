@@ -24,6 +24,15 @@ public partial class BattalionInputSystem : SystemBase
             var ray = cam.ScreenPointToRay(mouse.position.ReadValue());
             if (Physics.SphereCast(ray, 0.4f, out var hit, 500f))
             {
+                // Castle click → open shop
+                if (hit.collider.gameObject.name == "PlayerCastle")
+                {
+                    cmd.ValueRW.selectedBattalion = Entity.Null;
+                    ShopUI shop = Object.FindObjectOfType<ShopUI>();
+                    if (shop != null) shop.SetOpen(true);
+                    return;
+                }
+
                 var e = ResolveEntity(hit.collider.gameObject);
                 if (e != Entity.Null && EntityManager.HasComponent<SoldierData>(e))
                 {
