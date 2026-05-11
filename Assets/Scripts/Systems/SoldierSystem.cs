@@ -30,7 +30,11 @@ public partial class SoldierSystem : SystemBase
 
                 case SoldierActionState.AttackingForward:
                     sd.attackT += dt / sd.dashTotalTime;
-                    if (sd.attackT >= 1f) { sd.actionState = SoldierActionState.AttackingBack; sd.attackT = 0; }
+                    if (sd.attackT >= 1f)
+                    {
+                        sd.actionState = SoldierActionState.AttackingBack; sd.attackT = 0;
+                        DealDamage(sd.attackTarget);
+                    }
                     else
                     {
                         float t = math.clamp(sd.attackT, 0, 1);
@@ -113,6 +117,26 @@ public partial class SoldierSystem : SystemBase
             if (link.ValueRO.goInstanceID == id && EntityManager.HasComponent<BattalionData>(sd.ValueRO.battalionEntity))
                 return EntityManager.GetComponentData<BattalionData>(sd.ValueRO.battalionEntity).owner;
         return null;
+    }
+
+    void DealDamage(float3 targetPos)
+    {
+        var hits = Physics.OverlapSphere((Vector3)targetPos, 0.8f);
+        foreach (var h in hits)
+        {
+            int id = h.gameObject.GetInstanceID();
+            foreach (var (link, hpRef) in SystemAPI.Query<RefRO<EntityLink>, RefRW<HealthData>>())
+            {
+                if (link.ValueRO.goInstanceID == id)
+                {
+                    var hp = hpRef.ValueRW;
+                    hp.currentHP -= 5;
+                    if (hp.currentHP < 0) hp.currentHP = 0;
+                    hpRef.ValueRW = hp;
+                    return;
+                }
+            }
+        }
     }
 
     static float EaseOut(float t) => 1f - (1f - t) * (1f - t);

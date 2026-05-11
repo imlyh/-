@@ -70,6 +70,14 @@ public struct PlayerGoldData : IComponentData
     public int gold;
 }
 
+// ---- Health ----
+
+public struct HealthData : IComponentData
+{
+    public int currentHP;
+    public int maxHP;
+}
+
 // ---- Enemy AI ----
 
 public enum EnemyAIPhase : byte { GoMine, Mining, ReturnCastle, AttackCastle }

@@ -57,6 +57,9 @@ public partial class BattalionInitializationSystem : SystemBase
             Debug.LogWarning("[ECS] EnemyBTTemplate 未设置，敌军将不使用 Behavior Designer AI");
         }
 
+        CreateCastle(new float3(2,0,10), BattalionOwner.Player, "PlayerCastle");
+        CreateCastle(new float3(27,0,10), BattalionOwner.Enemy, "EnemyCastle");
+
         Debug.Log("[ECS] Battalions created");
     }
 
@@ -100,6 +103,7 @@ public partial class BattalionInitializationSystem : SystemBase
                 attackRange=cfg.attackRange, attackCooldown=cfg.attackCooldown,
                 dashSpeed=cfg.dashSpeed, dashHeight=cfg.dashHeight
             });
+            em.AddComponentData(se, new HealthData{currentHP=20, maxHP=20});
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = $"{name}_S{i}_GO";
             go.transform.localScale = Vector3.one * 0.35f;
@@ -117,5 +121,16 @@ public partial class BattalionInitializationSystem : SystemBase
             em.AddComponentData(se, new EntityLink{goInstanceID=go.GetInstanceID()});
         }
         return e;
+    }
+
+    void CreateCastle(float3 pos, BattalionOwner owner, string name)
+    {
+        var em = EntityManager;
+        var e = em.CreateEntity();
+        em.SetName(e, name);
+        em.AddComponentData(e, LocalTransform.FromPosition(pos));
+        em.AddComponentData(e, new LocalToWorld{Value=float4x4.Translate(pos)});
+        em.AddComponentData(e, new HealthData{currentHP=200, maxHP=200});
+        em.AddComponentData(e, new EntityLink{goInstanceID = GameObject.Find(name)?.GetInstanceID() ?? 0});
     }
 }
