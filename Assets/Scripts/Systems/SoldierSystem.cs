@@ -11,7 +11,7 @@ public partial class SoldierSystem : SystemBase
     {
         float dt = SystemAPI.Time.DeltaTime;
 
-        foreach (var (sdRef, ltxRef) in SystemAPI.Query<RefRW<SoldierData>, RefRW<LocalTransform>>())
+        foreach (var (sdRef, ltxRef, linkRef) in SystemAPI.Query<RefRW<SoldierData>, RefRW<LocalTransform>, RefRO<EntityLink>>())
         {
             var sd = sdRef.ValueRW;
             if (sd.cooldownRemaining > 0) sd.cooldownRemaining -= dt;
@@ -33,7 +33,7 @@ public partial class SoldierSystem : SystemBase
                     if (sd.attackT >= 1f)
                     {
                         sd.actionState = SoldierActionState.AttackingBack; sd.attackT = 0;
-                        DealDamage(sd.attackTarget);
+                        DealDamage(sd.attackTarget, linkRef.ValueRO.goInstanceID);
                     }
                     else
                     {
@@ -140,12 +140,13 @@ public partial class SoldierSystem : SystemBase
         return null;
     }
 
-    void DealDamage(float3 targetPos)
+    void DealDamage(float3 targetPos, int selfGOId)
     {
         var hits = Physics.OverlapSphere((Vector3)targetPos, 0.8f);
         foreach (var h in hits)
         {
             int id = h.gameObject.GetInstanceID();
+            if (id == selfGOId) continue;
             foreach (var (link, hpRef) in SystemAPI.Query<RefRO<EntityLink>, RefRW<HealthData>>())
             {
                 if (link.ValueRO.goInstanceID == id)
