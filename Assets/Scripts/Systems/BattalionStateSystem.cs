@@ -95,8 +95,8 @@ public partial class BattalionStateSystem : SystemBase
 
     Entity HasHealth(int goId)
     {
-        foreach (var (link, hp) in SystemAPI.Query<RefRO<EntityLink>, RefRO<HealthData>>())
-            if (link.ValueRO.goInstanceID == goId) return link.ValueRO.goInstanceID == goId ? Entity.Null : Entity.Null;
+        foreach (var (link, hp, entity) in SystemAPI.Query<RefRO<EntityLink>, RefRO<HealthData>>().WithEntityAccess())
+            if (link.ValueRO.goInstanceID == goId) return entity;
         return Entity.Null;
     }
 

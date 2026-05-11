@@ -1,3 +1,4 @@
+
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
@@ -238,28 +239,27 @@ public class ShopUI : MonoBehaviour
         {
             owner = BattalionOwner.Player, state = BattalionState.Idle,
             moveSpeed = cfg.moveSpeed, detectionRange = cfg.attackRange,
-            bobHeight = cfg.bobHeight, bobFrequency = cfg.bobFrequency,
-            bobPhase = UnityEngine.Random.Range(0f, 100f)
         });
         em.AddBuffer<BattalionPathPoint>(e);
 
-        float s = cfg.formationSpacing;
-        var off = new float3[] { new(-s / 2, 0, -s / 2), new(s / 2, 0, -s / 2), new(-s / 2, 0, s / 2), new(s / 2, 0, s / 2) };
         for (int i = 0; i < 4; i++)
         {
             var se = em.CreateEntity();
             em.SetName(se, $"PBN_Shop_S{i}");
-            em.AddComponentData(se, LocalTransform.FromPosition(off[i]));
+            em.AddComponentData(se, LocalTransform.FromPosition(0));
             em.AddComponentData(se, new SoldierData
             {
-                battalionEntity = e, formationOffset = off[i],
+                battalionEntity = e,
                 attackRange = cfg.attackRange, attackCooldown = cfg.attackCooldown,
-                dashSpeed = cfg.dashSpeed, dashHeight = cfg.dashHeight
+                dashSpeed = cfg.dashSpeed, dashHeight = cfg.dashHeight,
+                maxSpeed = cfg.moveSpeed * 1.2f, maxForce = cfg.moveSpeed * 3f,
+                neighborRadius = 2.5f, separationRadius = 0.8f,
+                currentHP = 20, maxHP = 20
             });
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = $"Shop_S{i}_GO";
             go.transform.localScale = Vector3.one * 0.35f;
-            go.transform.position = new Vector3(spawnPos.x + off[i].x, 0, spawnPos.z + off[i].z);
+            go.transform.position = spawnPos;
             go.layer = layer; go.tag = "PlayerUnit";
             go.GetComponent<MeshRenderer>().material = mat;
             var agent = go.AddComponent<NavMeshAgent>();

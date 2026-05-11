@@ -1,3 +1,4 @@
+
 using Unity.Entities;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,7 +18,7 @@ public class CastleHPBar : MonoBehaviour
         canvas.renderMode = RenderMode.WorldSpace;
         canvas.sortingOrder = 50;
         var rt = canvas.GetComponent<RectTransform>();
-        rt.sizeDelta = new Vector2(2f, 0.3f);
+        rt.sizeDelta = new Vector2(0.7f, 0.08f);
 
         var sliderGo = new GameObject("Slider");
         sliderGo.transform.SetParent(transform);
@@ -33,12 +34,14 @@ public class CastleHPBar : MonoBehaviour
         var bg = bgGo.AddComponent<Image>();
         bg.color = new Color(0.2f, 0.2f, 0.2f);
         bg.rectTransform.anchorMin = Vector2.zero; bg.rectTransform.anchorMax = Vector2.one;
+        bg.rectTransform.sizeDelta = Vector2.zero;
 
         var fillGo = new GameObject("Fill");
         fillGo.transform.SetParent(sliderGo.transform, false);
         fillImg = fillGo.AddComponent<Image>();
         fillImg.color = barColor;
         fillImg.rectTransform.anchorMin = Vector2.zero; fillImg.rectTransform.anchorMax = Vector2.one;
+        fillImg.rectTransform.sizeDelta = Vector2.zero;
 
         slider.fillRect = fillImg.rectTransform;
         slider.maxValue = 1;
@@ -48,7 +51,7 @@ public class CastleHPBar : MonoBehaviour
         if (castleGo != null)
         {
             castleGOId = castleGo.GetInstanceID();
-            transform.position = castleGo.transform.position + Vector3.up * 1.2f;
+            transform.position = castleGo.transform.position + Vector3.up * 0.6f;
             transform.forward = Camera.main.transform.forward;
         }
     }

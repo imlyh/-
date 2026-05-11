@@ -26,11 +26,12 @@ public partial class BoidMovementSystem : SystemBase
 
         for (int i = 0; i < entities.Length; i++)
         {
-            if (sds[i].attackState != 0) continue; // skip during attack dash
+            var sd = sds[i];
+            if (sd.attackState != 0) continue;
 
             float3 pos = ltws[i].Position;
-            float3 vel = sds[i].velocity;
-            Entity batEnt = sds[i].battalionEntity;
+            float3 vel = sd.velocity;
+            Entity batEnt = sd.battalionEntity;
 
             float3 cohesion = float3.zero;
             float3 separation = float3.zero;
@@ -43,12 +44,12 @@ public partial class BoidMovementSystem : SystemBase
                 if (sds[j].battalionEntity != batEnt) continue;
                 float3 diff = ltws[j].Position - pos;
                 float dist = math.length(diff);
-                if (dist < sds[i].neighborRadius)
+                if (dist < sd.neighborRadius)
                 {
                     cohesion += ltws[j].Position;
                     alignment += sds[j].velocity;
                     count++;
-                    if (dist < sds[i].separationRadius && dist > 0.01f)
+                    if (dist < sd.separationRadius && dist > 0.01f)
                         separation -= math.normalize(diff) / dist;
                 }
             }
@@ -59,7 +60,7 @@ public partial class BoidMovementSystem : SystemBase
                 alignment = alignment / count - vel;
             }
 
-            float3 toTarget = sds[i].targetPosition - pos;
+            float3 toTarget = sd.targetPosition - pos;
             toTarget.y = 0;
             float3 targetForce = math.normalizesafe(toTarget) * targetW;
 
@@ -68,20 +69,23 @@ public partial class BoidMovementSystem : SystemBase
             force.y = 0;
 
             float fMag = math.length(force);
-            if (fMag > sds[i].maxForce) force = math.normalize(force) * sds[i].maxForce;
+            if (fMag > sd.maxForce) force = math.normalize(force) * sd.maxForce;
 
             vel += force * dt;
             float vMag = math.length(vel);
-            if (vMag > sds[i].maxSpeed) vel = math.normalize(vel) * sds[i].maxSpeed;
+            if (vMag > sd.maxSpeed) vel = math.normalize(vel) * sd.maxSpeed;
             if (vMag < 0.1f && count > 0) vel = math.normalizesafe(cohesion) * 0.5f;
 
-            sds[i].velocity = vel;
+            sd.velocity = vel;
 
             float3 newPos = pos + vel * dt;
-            float bob = math.sin(newPos.x * 4f + newPos.z * 4f + SystemAPI.Time.ElapsedTime * 5f) * 0.12f;
+            float bob = math.sin(newPos.x * 4f + newPos.z * 4f + (float)SystemAPI.Time.ElapsedTime * 5f) * 0.12f;
             newPos.y = math.max(0, bob);
 
-            ltxs[i].Position = newPos;
+            sds[i] = sd;
+            var ltx = ltxs[i];
+            ltx.Position = newPos;
+            ltxs[i] = ltx;
         }
 
         // Write back

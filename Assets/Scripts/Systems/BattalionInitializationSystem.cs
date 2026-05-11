@@ -1,3 +1,4 @@
+
 using Unity.Entities;
 using Unity.Transforms;
 using Unity.Mathematics;
@@ -84,30 +85,28 @@ public partial class BattalionInitializationSystem : SystemBase
         em.AddComponentData(e, new BattalionData
         {
             owner=owner, state=BattalionState.Idle,
-            moveSpeed=cfg.moveSpeed, detectionRange=cfg.attackRange,
-            bobHeight=cfg.bobHeight, bobFrequency=cfg.bobFrequency,
-            bobPhase=UnityEngine.Random.Range(0f,100f)
+            moveSpeed=cfg.moveSpeed, detectionRange=cfg.attackRange
         });
         em.AddBuffer<BattalionPathPoint>(e);
         if (aiData.HasValue) em.AddComponentData(e, aiData.Value);
 
-        float s = cfg.formationSpacing;
-        var off = new float3[]{ new(-s/2,0,-s/2),new(s/2,0,-s/2),new(-s/2,0,s/2),new(s/2,0,s/2) };
         for (int i = 0; i < 4; i++)
         {
             var se = em.CreateEntity();
             em.SetName(se, $"{name}_S{i}");
-            em.AddComponentData(se, LocalTransform.FromPosition(off[i]));
+            float3 off = new float3(0, 0, 0);
+            em.AddComponentData(se, LocalTransform.FromPosition(off));
             em.AddComponentData(se, new SoldierData{
-                battalionEntity=e, formationOffset=off[i],
-                attackRange=cfg.attackRange, attackCooldown=cfg.attackCooldown,
-                dashSpeed=cfg.dashSpeed, dashHeight=cfg.dashHeight
+                battalionEntity=e, attackRange=cfg.attackRange, attackCooldown=cfg.attackCooldown,
+                dashSpeed=cfg.dashSpeed, dashHeight=cfg.dashHeight,
+                maxSpeed=cfg.moveSpeed * 1.2f, maxForce=cfg.moveSpeed * 3f,
+                neighborRadius=2.5f, separationRadius=0.8f,
+                currentHP=20, maxHP=20
             });
-            em.AddComponentData(se, new HealthData{currentHP=20, maxHP=20});
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = $"{name}_S{i}_GO";
             go.transform.localScale = Vector3.one * 0.35f;
-            go.transform.position = new Vector3(pos.x+off[i].x, pos.y, pos.z+off[i].z);
+            go.transform.position = new Vector3(pos.x, 0, pos.z);
             go.layer = layer;
             go.tag = owner==BattalionOwner.Player?"PlayerUnit":"EnemyUnit";
             go.GetComponent<MeshRenderer>().material = mat;

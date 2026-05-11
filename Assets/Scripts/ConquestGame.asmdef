@@ -1,6 +1,6 @@
 {
     "name": "ConquestGame",
-    "rootNamespace": "ConquestGame",
+    "rootNamespace": "",
     "references": [
         "Unity.Entities",
         "Unity.Entities.Graphics",

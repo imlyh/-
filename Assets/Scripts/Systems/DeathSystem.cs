@@ -1,9 +1,10 @@
+
 using Unity.Entities;
 using Unity.Transforms;
 using UnityEngine;
 
 [UpdateInGroup(typeof(SimulationSystemGroup))]
-[UpdateAfter(typeof(SoldierSystem))]
+[UpdateAfter(typeof(CombatSystem))]
 public partial class DeathSystem : SystemBase
 {
     protected override void OnUpdate()

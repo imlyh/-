@@ -64,6 +64,7 @@ public partial class CombatSystem : SystemBase
 
     Entity FindClosestEnemy(float3 worldPos, BattalionOwner owner, float searchRadius)
     {
+        var em = EntityManager;
         var query = em.CreateEntityQuery(typeof(SoldierData), typeof(HealthData), typeof(LocalToWorld));
         var entities = query.ToEntityArray(Unity.Collections.Allocator.Temp);
         var sds = query.ToComponentDataArray<SoldierData>(Unity.Collections.Allocator.Temp);
