@@ -2,11 +2,10 @@ using Unity.Entities;
 using Unity.Mathematics;
 
 public enum BattalionOwner { Player, Enemy }
-public enum BattalionState { Idle, Moving, Mining, Attacking }
+public enum BattalionState { Idle, Moving, InCombat }
 public enum CommandType { Move, Mine, Attack }
 
 // ---- Battalion ----
-
 public struct BattalionData : IComponentData
 {
     public BattalionOwner owner;
@@ -15,39 +14,38 @@ public struct BattalionData : IComponentData
     public float3 targetCell;
     public float moveSpeed;
     public float detectionRange;
-    public float bobHeight;
-    public float bobFrequency;
-    public float bobPhase;
     public int pathIndex;
+    public float3 targetPosition;
+    public Entity targetEnemy;
 }
+public struct BattalionPathPoint : IBufferElementData { public float3 position; }
 
-public struct BattalionPathPoint : IBufferElementData
-{
-    public float3 position;
-}
-
-// ---- Soldier ----
-
-public enum SoldierActionState : byte { Idle, AttackingForward, AttackingBack }
-
+// ---- Soldier (Boids + Combat) ----
 public struct SoldierData : IComponentData
 {
     public Entity battalionEntity;
+    public Entity currentTarget;
+    public float3 velocity;
+    public float maxSpeed;
+    public float maxForce;
+    public float neighborRadius;
+    public float separationRadius;
+    public float3 targetPosition;
     public float attackRange;
     public float attackCooldown;
+    public float cooldownRemaining;
     public float dashSpeed;
     public float dashHeight;
-    public float cooldownRemaining;
-    public SoldierActionState actionState;
     public float attackT;
     public float dashTotalTime;
     public float3 attackOrigin;
     public float3 attackTarget;
-    public float3 formationOffset;
+    public byte attackState;
+    public int currentHP;
+    public int maxHP;
 }
 
 // ---- Player Command ----
-
 public struct PlayerCommandData : IComponentData
 {
     public Entity selectedBattalion;
@@ -56,32 +54,17 @@ public struct PlayerCommandData : IComponentData
     public bool pending;
 }
 
-// ---- Entity-GameObject link ----
-
-public struct EntityLink : IComponentData
-{
-    public int goInstanceID;
-}
-
 // ---- Player Gold ----
-
-public struct PlayerGoldData : IComponentData
-{
-    public int gold;
-}
+public struct PlayerGoldData : IComponentData { public int gold; }
 
 // ---- Health ----
+public struct HealthData : IComponentData { public int currentHP; public int maxHP; }
 
-public struct HealthData : IComponentData
-{
-    public int currentHP;
-    public int maxHP;
-}
+// ---- Entity-GameObject link ----
+public struct EntityLink : IComponentData { public int goInstanceID; }
 
 // ---- Enemy AI ----
-
 public enum EnemyAIPhase : byte { GoMine, Mining, ReturnCastle, AttackCastle }
-
 public struct EnemyAIData : IComponentData
 {
     public EnemyAIPhase phase;
