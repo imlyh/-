@@ -33,7 +33,7 @@ public partial class SoldierSystem : SystemBase
                     if (sd.attackT >= 1f)
                     {
                         sd.actionState = SoldierActionState.AttackingBack; sd.attackT = 0;
-                        DealDamage(sd.attackTarget, linkRef.ValueRO.goInstanceID);
+                        DealDamage(sd.attackTarget, sd.battalionEntity);
                     }
                     else
                     {
@@ -140,13 +140,17 @@ public partial class SoldierSystem : SystemBase
         return null;
     }
 
-    void DealDamage(float3 targetPos, int selfGOId)
+    void DealDamage(float3 targetPos, Entity attackerBattalion)
     {
         var hits = Physics.OverlapSphere((Vector3)targetPos, 0.8f);
         foreach (var h in hits)
         {
             int id = h.gameObject.GetInstanceID();
-            if (id == selfGOId) continue;
+            // Skip same battalion soldiers (covers self + friendly)
+            foreach (var (link, sd) in SystemAPI.Query<RefRO<EntityLink>, RefRO<SoldierData>>())
+                if (link.ValueRO.goInstanceID == id && sd.ValueRO.battalionEntity == attackerBattalion)
+                    goto skip;
+            // Apply damage
             foreach (var (link, hpRef) in SystemAPI.Query<RefRO<EntityLink>, RefRW<HealthData>>())
             {
                 if (link.ValueRO.goInstanceID == id)
@@ -158,6 +162,7 @@ public partial class SoldierSystem : SystemBase
                     return;
                 }
             }
+            skip:;
         }
     }
 
