@@ -9,6 +9,8 @@ public partial class EnemyAISystem : SystemBase
 {
     protected override void OnUpdate()
     {
+        Enabled = false; // Disabled — BT takes over
+        return;
         float dt = SystemAPI.Time.DeltaTime;
 
         foreach (var (aiRef, batRef, txRef, entity) in

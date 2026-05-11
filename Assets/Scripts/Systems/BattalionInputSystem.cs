@@ -26,7 +26,13 @@ public partial class BattalionInputSystem : SystemBase
             {
                 var e = ResolveEntity(hit.collider.gameObject);
                 if (e != Entity.Null && EntityManager.HasComponent<SoldierData>(e))
-                    cmd.ValueRW.selectedBattalion = EntityManager.GetComponentData<SoldierData>(e).battalionEntity;
+                {
+                    var batEntity = EntityManager.GetComponentData<SoldierData>(e).battalionEntity;
+                    if (EntityManager.HasComponent<BattalionData>(batEntity) &&
+                        EntityManager.GetComponentData<BattalionData>(batEntity).owner == BattalionOwner.Player)
+                        cmd.ValueRW.selectedBattalion = batEntity;
+                    else cmd.ValueRW.selectedBattalion = Entity.Null;
+                }
                 else cmd.ValueRW.selectedBattalion = Entity.Null;
             }
             else { Debug.Log("[INPUT] Ray missed"); cmd.ValueRW.selectedBattalion = Entity.Null; }
