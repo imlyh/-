@@ -17,7 +17,7 @@ public partial class BoidMovementSystem : SystemBase
         var em = EntityManager;
 
         // Collect all soldiers into arrays
-        var queryDesc = new EntityQueryDesc { All = new[] { ComponentType.ReadWrite<SoldierData>(), ComponentType.ReadWrite<LocalTransform>() } };
+        var queryDesc = new EntityQueryDesc { All = new[] { ComponentType.ReadWrite<SoldierData>(), ComponentType.ReadWrite<LocalTransform>(), ComponentType.ReadWrite<LocalToWorld>() } };
         var q = em.CreateEntityQuery(queryDesc);
         var entities = q.ToEntityArray(Allocator.TempJob);
         var sds = q.ToComponentDataArray<SoldierData>(Allocator.TempJob);
