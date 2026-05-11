@@ -37,7 +37,7 @@ namespace Opsive.BehaviorDesigner.Runtime.Tasks.Conditionals
     {
         private void OnUpdate(ref SystemState state)
         {
-            var em = state.EntityManager;
+            var em = World.DefaultGameObjectInjectionWorld.EntityManager;
 
             foreach (var (taskBuf, compBuf) in
                 SystemAPI.Query<DynamicBuffer<TaskComponent>, DynamicBuffer<EnemyCheckStateComponent>>()

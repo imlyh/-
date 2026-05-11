@@ -46,7 +46,7 @@ namespace Opsive.BehaviorDesigner.Runtime.Tasks.Actions
     {
         private void OnUpdate(ref SystemState state)
         {
-            var em = state.EntityManager;
+            var em = World.DefaultGameObjectInjectionWorld.EntityManager;
             var q = em.CreateEntityQuery(typeof(EnemyAIData), typeof(BattalionData));
             var entities = q.ToEntityArray(Allocator.Temp);
 
