@@ -63,6 +63,13 @@ public struct EntityLink : IComponentData
     public int goInstanceID;
 }
 
+// ---- Player Gold ----
+
+public struct PlayerGoldData : IComponentData
+{
+    public int gold;
+}
+
 // ---- Enemy AI ----
 
 public enum EnemyAIPhase : byte { GoMine, Mining, ReturnCastle, AttackCastle }

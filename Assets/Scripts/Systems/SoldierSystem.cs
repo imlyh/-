@@ -42,7 +42,13 @@ public partial class SoldierSystem : SystemBase
 
                 case SoldierActionState.AttackingBack:
                     sd.attackT += dt / sd.dashTotalTime;
-                    if (sd.attackT >= 1f) { ltxRef.ValueRW.Position = sd.formationOffset; sd.actionState = SoldierActionState.Idle; }
+                    if (sd.attackT >= 1f)
+                    {
+                        ltxRef.ValueRW.Position = sd.formationOffset;
+                        sd.actionState = SoldierActionState.Idle;
+                        if (batData.state == BattalionState.Mining && SystemAPI.TryGetSingletonRW<PlayerGoldData>(out var gold))
+                        { gold.ValueRW.gold += 1; }
+                    }
                     else
                     {
                         float t = math.clamp(sd.attackT, 0, 1);

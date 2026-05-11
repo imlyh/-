@@ -4,6 +4,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.AI;
 using System.Collections.Generic;
+using Opsive.BehaviorDesigner.Runtime;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -12,10 +13,13 @@ using UnityEditor;
 public partial class BattalionInitializationSystem : SystemBase
 {
     public static readonly Dictionary<int, GameObject> GOMap = new();
+    public static BehaviorTree EnemyBTTemplate;
 
     protected override void OnCreate()
     {
         EntityManager.CreateSingleton<PlayerCommandData>();
+        var goldEntity = EntityManager.CreateSingleton<PlayerGoldData>();
+        EntityManager.SetComponentData(goldEntity, new PlayerGoldData { gold = 100 });
     }
 
     protected override void OnUpdate()
@@ -33,8 +37,26 @@ public partial class BattalionInitializationSystem : SystemBase
             castlePos=new float3(27,0,10), enemyCastlePos=new float3(2,0,10), miningDuration=cfg.miningDuration };
         var aiB = new EnemyAIData{ phase=EnemyAIPhase.GoMine, mineTarget=new float3(22,0,14),
             castlePos=new float3(27,0,10), enemyCastlePos=new float3(2,0,10), miningDuration=cfg.miningDuration };
-        CreateBattalion(new float3(25,0,10), BattalionOwner.Enemy, "EBN_A", mat, layer, aiA, cfg);
-        CreateBattalion(new float3(25,0,13), BattalionOwner.Enemy, "EBN_B", mat, layer, aiB, cfg);
+        var ebnA = CreateBattalion(new float3(25,0,10), BattalionOwner.Enemy, "EBN_A", mat, layer, aiA, cfg);
+        var ebnB = CreateBattalion(new float3(25,0,13), BattalionOwner.Enemy, "EBN_B", mat, layer, aiB, cfg);
+
+        if (EnemyBTTemplate != null)
+        {
+            var bt1 = Object.Instantiate(EnemyBTTemplate);
+            bt1.StartWhenEnabled = false;
+            bt1.StartBehavior(World, ebnA);
+
+            var bt2 = Object.Instantiate(EnemyBTTemplate);
+            bt2.StartWhenEnabled = false;
+            bt2.StartBehavior(World, ebnB);
+
+            Debug.Log("[ECS] Behavior Trees started for EBN_A and EBN_B");
+        }
+        else
+        {
+            Debug.LogWarning("[ECS] EnemyBTTemplate 未设置，敌军将不使用 Behavior Designer AI");
+        }
+
         Debug.Log("[ECS] Battalions created");
     }
 
@@ -48,7 +70,7 @@ public partial class BattalionInitializationSystem : SystemBase
         return ScriptableObject.CreateInstance<BattalionConfig>();
     }
 
-    void CreateBattalion(float3 pos, BattalionOwner owner, string name, Material mat, int layer,
+    Entity CreateBattalion(float3 pos, BattalionOwner owner, string name, Material mat, int layer,
         EnemyAIData? aiData, BattalionConfig cfg)
     {
         var em = EntityManager;
@@ -94,5 +116,6 @@ public partial class BattalionInitializationSystem : SystemBase
             GOMap[go.GetInstanceID()] = go;
             em.AddComponentData(se, new EntityLink{goInstanceID=go.GetInstanceID()});
         }
+        return e;
     }
 }
