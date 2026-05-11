@@ -11,6 +11,7 @@ public class GameOverUI : MonoBehaviour
     private Text messageText;
     private Button restartBtn;
     private bool over;
+    private bool started;
 
     void Start()
     {
@@ -159,6 +160,7 @@ public class GameOverUI : MonoBehaviour
 
     void Update()
     {
+        if (!started) { started = true; panel.SetActive(false); return; }
         if (over) return;
         var w = World.DefaultGameObjectInjectionWorld;
         if (w == null || !w.IsCreated) return;

@@ -94,7 +94,9 @@ public partial class BattalionInitializationSystem : SystemBase
         {
             var se = em.CreateEntity();
             em.SetName(se, $"{name}_S{i}");
-            float3 off = new float3(0, 0, 0);
+            float3 off = new float3(
+                UnityEngine.Random.Range(-0.6f, 0.6f), 0,
+                UnityEngine.Random.Range(-0.6f, 0.6f));
             em.AddComponentData(se, LocalTransform.FromPosition(off));
             em.AddComponentData(se, new SoldierData{
                 battalionEntity=e, attackRange=cfg.attackRange, attackCooldown=cfg.attackCooldown,

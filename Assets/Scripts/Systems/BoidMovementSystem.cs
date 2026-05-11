@@ -51,6 +51,9 @@ public partial class BoidMovementSystem : SystemBase
                     count++;
                     if (dist < sd.separationRadius && dist > 0.01f)
                         separation -= math.normalize(diff) / dist;
+                    else if (dist < 0.01f && i > j)
+                        // Same position: add random push
+                        separation += new float3(UnityEngine.Random.Range(-1f,1f), 0, UnityEngine.Random.Range(-1f,1f));
                 }
             }
 
