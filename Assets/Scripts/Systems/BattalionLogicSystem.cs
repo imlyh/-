@@ -43,6 +43,9 @@ public partial class BattalionLogicSystem : SystemBase
                     { b.commandType = CommandType.Attack; b.state = BattalionState.Attacking; }
                     break;
                 case BattalionState.Moving:
+                    // Auto-build path if empty (for BT-driven commands)
+                    if (pathBuf.Length == 0 || b.pathIndex >= pathBuf.Length)
+                        BuildPath(tx.Position, b.targetCell, pathBuf);
                     MoveTick(ref b, ref tx, pathBuf, dt, flat);
                     break;
                 case BattalionState.Mining:
