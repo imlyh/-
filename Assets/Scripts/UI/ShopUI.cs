@@ -70,6 +70,8 @@ public class ShopUI : MonoBehaviour
         return b;
     }
 
+    public void SetOpen(bool open) { panel.SetActive(open); }
+
     void Update()
     {
         if (!panel.activeSelf) return;
@@ -122,7 +124,7 @@ public class ShopUI : MonoBehaviour
             owner = BattalionOwner.Player, state = BattalionState.Idle,
             moveSpeed = cfg.moveSpeed, detectionRange = cfg.attackRange,
             bobHeight = cfg.bobHeight, bobFrequency = cfg.bobFrequency,
-            bobPhase = Random.Range(0f, 100f)
+            bobPhase = UnityEngine.Random.Range(0f, 100f)
         });
         em.AddBuffer<BattalionPathPoint>(e);
 
