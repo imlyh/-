@@ -26,6 +26,9 @@ public class BattalionConfig : ScriptableObject
     [Tooltip("移动速度（单位/秒），默认4")]
     [Range(1f, 10f)] public float moveSpeed = 4f;
 
+    [Tooltip("营级发现敌人的范围，默认1.3")]
+    [Range(0.5f, 5f)] public float detectionRange = 1.3f;
+
     [Tooltip("移动弹跳幅度，默认0.2")]
     [Range(0.05f, 1f)] public float bobHeight = 0.2f;
 

@@ -4,12 +4,18 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.AI;
 
+/// <summary>
+/// 营移动系统：处理玩家指令和敌方AI指令的路径移动
+/// </summary>
 [UpdateInGroup(typeof(SimulationSystemGroup))]
 [UpdateAfter(typeof(BattalionInputSystem))]
 [UpdateAfter(typeof(BattalionStateSystem))]
 public partial class BattalionLogicSystem : SystemBase
 {
-    protected override void OnCreate() { RequireForUpdate<PlayerCommandData>(); }
+    protected override void OnCreate()
+    {
+        RequireForUpdate<PlayerCommandData>();
+    }
 
     protected override void OnUpdate()
     {
@@ -23,8 +29,9 @@ public partial class BattalionLogicSystem : SystemBase
             var b = bRef.ValueRW;
             var tx = txRef.ValueRW;
 
-            // Process player command
-            if (cmd.ValueRW.pending && cmd.ValueRW.selectedBattalion == entity)
+            // Process player command for player-owned battalions
+            if (b.owner == BattalionOwner.Player &&
+                cmd.ValueRW.pending && cmd.ValueRW.selectedBattalion == entity)
             {
                 b.targetCell = cmd.ValueRW.targetCell;
                 b.commandType = cmd.ValueRW.commandType;
@@ -35,36 +42,36 @@ public partial class BattalionLogicSystem : SystemBase
                 cmd.ValueRW.pending = false;
             }
 
-            float3 flat = tx.Position; flat.y = 0;
-
+            // --- Movement ---
             if (b.state == BattalionState.Moving)
             {
-                if (pathBuf.Length == 0 || b.pathIndex >= pathBuf.Length)
-                    BuildPath(tx.Position, b.targetCell, pathBuf);
+                float3 flat = tx.Position; flat.y = 0;
 
-                var sd = pathBuf;
-                if (b.pathIndex < sd.Length)
+                if (pathBuf.Length == 0 || b.pathIndex >= pathBuf.Length)
                 {
-                    float3 target = sd[b.pathIndex].position;
+                    BuildPath(tx.Position, b.targetCell, pathBuf);
+                    b.pathIndex = 0;
+                }
+
+                if (b.pathIndex < pathBuf.Length)
+                {
+                    float3 target = pathBuf[b.pathIndex].position;
                     float3 dir = target - flat;
                     float dist = math.length(dir);
                     float step = b.moveSpeed * dt;
 
-                    if (step >= dist) { flat = target; b.pathIndex++; }
-                    else flat += math.normalize(dir) * step;
+                    if (step >= dist)
+                    {
+                        flat = target;
+                        b.pathIndex++;
+                    }
+                    else if (dist > 0.01f)
+                    {
+                        flat += math.normalize(dir) * step;
+                    }
 
-                    b.targetPosition = flat;
                     tx.Position = new float3(flat.x, 0, flat.z);
-                }
-            }
-
-            if (b.state == BattalionState.InCombat)
-            {
-                // Keep targetPosition updated
-                if (b.targetEnemy != Entity.Null && EntityManager.Exists(b.targetEnemy)
-                    && EntityManager.HasComponent<LocalToWorld>(b.targetEnemy))
-                {
-                    b.targetPosition = EntityManager.GetComponentData<LocalToWorld>(b.targetEnemy).Position;
+                    b.targetPosition = flat;
                 }
             }
 
@@ -77,10 +84,14 @@ public partial class BattalionLogicSystem : SystemBase
     {
         buf.Clear();
         var navPath = new NavMeshPath();
-        var f = new Vector3(from.x, 0, from.z); var t = new Vector3(to.x, 0, to.z);
-        if (NavMesh.CalculatePath(f, t, NavMesh.AllAreas, navPath) && navPath.status == NavMeshPathStatus.PathComplete)
+        var f = new Vector3(from.x, 0, from.z);
+        var t = new Vector3(to.x, 0, to.z);
+        if (NavMesh.CalculatePath(f, t, NavMesh.AllAreas, navPath) &&
+            navPath.status == NavMeshPathStatus.PathComplete)
+        {
             for (int i = 0; i < navPath.corners.Length; i++)
                 buf.Add(new BattalionPathPoint { position = new float3(navPath.corners[i].x, 0, navPath.corners[i].z) });
+        }
         if (buf.Length == 0 || math.distance(buf[buf.Length - 1].position, to) > 0.01f)
             buf.Add(new BattalionPathPoint { position = to });
     }

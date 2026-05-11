@@ -37,7 +37,7 @@ public class GameOverUI : MonoBehaviour
         ovRT.sizeDelta = Vector2.zero;
         var ovImg = overlay.AddComponent<Image>();
         ovImg.color = new Color(0, 0, 0, 0.7f);
-        ovImg.raycastTarget = false;
+        ovImg.raycastTarget = true;
 
         // --- Panel ---
         panel = new GameObject("GameOverPanel");

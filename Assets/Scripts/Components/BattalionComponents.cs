@@ -17,6 +17,8 @@ public struct BattalionData : IComponentData
     public int pathIndex;
     public float3 targetPosition;
     public Entity targetEnemy;
+    public int soldierCount;        // alive soldiers count, updated each frame
+    public float engageRadius;      // soldiers start combat when enemy within this range
 }
 public struct BattalionPathPoint : IBufferElementData { public float3 position; }
 
@@ -63,14 +65,15 @@ public struct HealthData : IComponentData { public int currentHP; public int max
 // ---- Entity-GameObject link ----
 public struct EntityLink : IComponentData { public int goInstanceID; }
 
-// ---- Enemy AI ----
-public enum EnemyAIPhase : byte { GoMine, Mining, ReturnCastle, AttackCastle }
+// ---- Enemy AI - Autonomous Decision Making ----
 public struct EnemyAIData : IComponentData
 {
-    public EnemyAIPhase phase;
-    public float phaseTimer;
-    public float3 mineTarget;
-    public float3 castlePos;
-    public float3 enemyCastlePos;
-    public float miningDuration;
+    public float decisionCooldown;    // seconds between decisions
+    public float decisionTimer;       // current countdown
+    public Entity currentTargetEntity; // player battalion or castle we're targeting
+    public float aggressiveness;      // 0-1, higher = more willing to attack
+    public float3 homePosition;       // return position after combat
 }
+
+// ---- Castle Tag (to identify castle entities) ----
+public struct CastleTag : IComponentData { public BattalionOwner owner; }

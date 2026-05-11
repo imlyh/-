@@ -1,11 +1,11 @@
-
 using Unity.Entities;
 using Unity.Transforms;
 using Unity.Mathematics;
-using UnityEngine;
+using Unity.Collections;
 
 /// <summary>
 /// 营级状态机：Idle↔Moving↔InCombat
+/// 使用 ECS Query 检测敌人，维护 soldierCount
 /// </summary>
 [UpdateInGroup(typeof(SimulationSystemGroup))]
 [UpdateAfter(typeof(BattalionInputSystem))]
@@ -14,107 +14,107 @@ public partial class BattalionStateSystem : SystemBase
 {
     protected override void OnUpdate()
     {
-        float dt = SystemAPI.Time.DeltaTime;
+        var em = EntityManager;
 
-        foreach (var (batRef, txRef, entity) in
-            SystemAPI.Query<RefRW<BattalionData>, RefRO<LocalTransform>>().WithEntityAccess())
+        // Build soldier lookup: positions + battalion + isEnemy
+        var soldierPositions = new NativeList<float3>(256, Allocator.Temp);
+        var soldierBattalionEntities = new NativeList<Entity>(256, Allocator.Temp);
+        var soldierIsEnemy = new NativeList<byte>(256, Allocator.Temp);
+
+        foreach (var (sd, ltw) in SystemAPI.Query<RefRO<SoldierData>, RefRO<LocalToWorld>>())
+        {
+            if (sd.ValueRO.currentHP <= 0) continue;
+            soldierPositions.Add(ltw.ValueRO.Position);
+            soldierBattalionEntities.Add(sd.ValueRO.battalionEntity);
+
+            bool isEnemy = false;
+            if (em.Exists(sd.ValueRO.battalionEntity) &&
+                em.HasComponent<BattalionData>(sd.ValueRO.battalionEntity) &&
+                em.GetComponentData<BattalionData>(sd.ValueRO.battalionEntity).owner == BattalionOwner.Enemy)
+                isEnemy = true;
+            soldierIsEnemy.Add(isEnemy ? (byte)1 : (byte)0);
+        }
+
+        // Process each battalion
+        foreach (var (batRef, ltw, entity) in
+            SystemAPI.Query<RefRW<BattalionData>, RefRO<LocalToWorld>>().WithEntityAccess())
         {
             var bat = batRef.ValueRW;
-            float3 flat = txRef.ValueRO.Position; flat.y = 0;
+            float3 flatPos = ltw.ValueRO.Position;
+            flatPos.y = 0;
 
-            // Process player command → Moving
-            if (bat.state == BattalionState.Idle && bat.commandType != CommandType.Move)
+            // Count alive soldiers for this battalion
+            int aliveCount = 0;
+            for (int i = 0; i < soldierPositions.Length; i++)
             {
-                // Transition decided by CommandMove calls below
+                if (soldierBattalionEntities[i] == entity)
+                    aliveCount++;
+            }
+            bat.soldierCount = aliveCount;
+
+            // --- State transitions ---
+
+            if (bat.state == BattalionState.Idle)
+            {
+                if (HasEnemyNearby(flatPos, entity, bat.owner, bat.detectionRange,
+                    soldierPositions, soldierBattalionEntities, soldierIsEnemy))
+                {
+                    bat.state = BattalionState.InCombat;
+                }
             }
 
-            // Idle: auto-detect enemies
-            if (bat.state == BattalionState.Idle && HasEnemyInRange(flat, bat.owner, bat.detectionRange, out Entity enemy))
-            {
-                bat.state = BattalionState.InCombat;
-                bat.targetEnemy = enemy;
-                bat.targetPosition = GetEntityPosition(enemy);
-            }
-
-            // Moving: check if reached detection range of a target
             if (bat.state == BattalionState.Moving)
             {
-                float3 toTarget = bat.targetCell - flat;
-                if (math.lengthsq(toTarget) < bat.detectionRange * bat.detectionRange)
+                float3 toTarget = bat.targetCell - flatPos;
+                toTarget.y = 0;
+                bool arrived = math.lengthsq(toTarget) < 1.5f * 1.5f;
+                bool enemiesNear = HasEnemyNearby(flatPos, entity, bat.owner, bat.engageRadius,
+                    soldierPositions, soldierBattalionEntities, soldierIsEnemy);
+
+                if (arrived)
                 {
-                    // If the target cell is near an enemy → InCombat
-                    if (HasEnemyAt(bat.targetCell, bat.owner))
-                    {
-                        bat.state = BattalionState.InCombat;
-                        bat.targetPosition = bat.targetCell;
-                    }
-                    else bat.state = BattalionState.Idle;
+                    bat.state = enemiesNear ? BattalionState.InCombat : BattalionState.Idle;
+                }
+                else if (enemiesNear)
+                {
+                    // Attack-move: soldiers auto-engage
+                    bat.state = BattalionState.InCombat;
                 }
             }
 
-            // InCombat: check if target still alive
-            if (bat.state == BattalionState.InCombat && bat.targetEnemy != Entity.Null)
+            if (bat.state == BattalionState.InCombat)
             {
-                if (!EntityManager.Exists(bat.targetEnemy) ||
-                    !EntityManager.HasComponent<HealthData>(bat.targetEnemy) ||
-                    EntityManager.GetComponentData<HealthData>(bat.targetEnemy).currentHP <= 0)
+                if (!HasEnemyNearby(flatPos, entity, bat.owner, bat.detectionRange * 1.5f,
+                    soldierPositions, soldierBattalionEntities, soldierIsEnemy))
                 {
-                    bat.targetEnemy = Entity.Null;
                     bat.state = BattalionState.Idle;
+                    bat.targetEnemy = Entity.Null;
                 }
-                else bat.targetPosition = GetEntityPosition(bat.targetEnemy);
             }
 
             batRef.ValueRW = bat;
         }
+
+        soldierPositions.Dispose();
+        soldierBattalionEntities.Dispose();
+        soldierIsEnemy.Dispose();
     }
 
-    bool HasEnemyInRange(float3 pos, BattalionOwner owner, float range, out Entity enemyEntity)
+    static bool HasEnemyNearby(float3 pos, Entity myBattalion, BattalionOwner myOwner, float range,
+        NativeList<float3> soldierPositions, NativeList<Entity> soldierBattalionEntities,
+        NativeList<byte> soldierIsEnemy)
     {
-        var hits = Physics.OverlapSphere(new Vector3(pos.x, 0, pos.z), range);
-        foreach (var h in hits)
+        float rangeSq = range * range;
+        for (int i = 0; i < soldierPositions.Length; i++)
         {
-            var e = HasHealth(h.gameObject.GetInstanceID());
-            if (e != Entity.Null)
-            {
-                var hpOwner = GetOwnerFromGO(h);
-                if (hpOwner != owner) { enemyEntity = e; return true; }
-            }
-        }
-        enemyEntity = Entity.Null; return false;
-    }
+            if (soldierBattalionEntities[i] == myBattalion) continue;
+            if (soldierIsEnemy[i] == 0) continue;
 
-    bool HasEnemyAt(float3 cell, BattalionOwner owner)
-    {
-        var hits = Physics.OverlapSphere(new Vector3(cell.x, 0, cell.z), 0.7f);
-        foreach (var h in hits)
-            if (GetOwnerFromGO(h) != owner && (h.name.Contains("Soldier") || h.name.Contains("Castle")))
+            float3 diff = soldierPositions[i] - pos;
+            diff.y = 0;
+            if (math.lengthsq(diff) < rangeSq)
                 return true;
+        }
         return false;
-    }
-
-    Entity HasHealth(int goId)
-    {
-        foreach (var (link, hp, entity) in SystemAPI.Query<RefRO<EntityLink>, RefRO<HealthData>>().WithEntityAccess())
-            if (link.ValueRO.goInstanceID == goId) return entity;
-        return Entity.Null;
-    }
-
-    BattalionOwner GetOwnerFromGO(UnityEngine.Collider h)
-    {
-        if (h.name.Contains("Player")) return BattalionOwner.Player;
-        if (h.name.Contains("Enemy")) return BattalionOwner.Enemy;
-        int id = h.gameObject.GetInstanceID();
-        foreach (var (link, sd) in SystemAPI.Query<RefRO<EntityLink>, RefRO<SoldierData>>())
-            if (link.ValueRO.goInstanceID == id)
-                return SystemAPI.GetComponent<BattalionData>(sd.ValueRO.battalionEntity).owner;
-        return BattalionOwner.Player;
-    }
-
-    float3 GetEntityPosition(Entity e)
-    {
-        if (!EntityManager.Exists(e) || !EntityManager.HasComponent<LocalToWorld>(e))
-            return float3.zero;
-        return EntityManager.GetComponentData<LocalToWorld>(e).Position;
     }
 }

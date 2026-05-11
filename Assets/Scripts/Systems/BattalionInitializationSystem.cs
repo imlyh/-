@@ -34,12 +34,16 @@ public partial class BattalionInitializationSystem : SystemBase
         CreateBattalion(new float3(4,0,10), BattalionOwner.Player, "PBN_A", mat, layer, null, cfg);
         CreateBattalion(new float3(4,0,7),  BattalionOwner.Player, "PBN_B", mat, layer, null, cfg);
 
-        var aiA = new EnemyAIData{ phase=EnemyAIPhase.GoMine, mineTarget=new float3(20,0,6),
-            castlePos=new float3(27,0,10), enemyCastlePos=new float3(2,0,10), miningDuration=cfg.miningDuration };
-        var aiB = new EnemyAIData{ phase=EnemyAIPhase.GoMine, mineTarget=new float3(22,0,14),
-            castlePos=new float3(27,0,10), enemyCastlePos=new float3(2,0,10), miningDuration=cfg.miningDuration };
+        var aiA = new EnemyAIData{
+            decisionCooldown=4f, decisionTimer=2f,
+            homePosition=new float3(25,0,10), aggressiveness=0.6f };
+        var aiB = new EnemyAIData{
+            decisionCooldown=4f, decisionTimer=3f,
+            homePosition=new float3(25,0,13), aggressiveness=0.8f };
         var ebnA = CreateBattalion(new float3(25,0,10), BattalionOwner.Enemy, "EBN_A", mat, layer, aiA, cfg);
         var ebnB = CreateBattalion(new float3(25,0,13), BattalionOwner.Enemy, "EBN_B", mat, layer, aiB, cfg);
+
+        // Behavior Designer still runs for legacy tasks, but EnemyAISystem now handles the autonomous decisions
 
         if (EnemyBTTemplate != null)
         {
@@ -85,7 +89,8 @@ public partial class BattalionInitializationSystem : SystemBase
         em.AddComponentData(e, new BattalionData
         {
             owner=owner, state=BattalionState.Idle,
-            moveSpeed=cfg.moveSpeed, detectionRange=cfg.attackRange
+            moveSpeed=cfg.moveSpeed, detectionRange=cfg.detectionRange,
+            engageRadius=cfg.attackRange
         });
         em.AddBuffer<BattalionPathPoint>(e);
         if (aiData.HasValue) em.AddComponentData(e, aiData.Value);
@@ -132,6 +137,7 @@ public partial class BattalionInitializationSystem : SystemBase
         em.AddComponentData(e, LocalTransform.FromPosition(pos));
         em.AddComponentData(e, new LocalToWorld{Value=float4x4.Translate(pos)});
         em.AddComponentData(e, new HealthData{currentHP=200, maxHP=200});
+        em.AddComponentData(e, new CastleTag{owner=owner});
         em.AddComponentData(e, new EntityLink{goInstanceID = GameObject.Find(name)?.GetInstanceID() ?? 0});
     }
 }
